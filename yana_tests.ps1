@@ -1,38 +1,18 @@
 #!/usr/bin/env pwsh
 
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # YANA Simple Testing Framework (PowerShell)
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # It contains functions and variables that can be used in other scripts to facilitate testing of YANA code and modules.
 # This framework supports running YANA tests.
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # USAGE:
 # 1. Create a new test script suffixing it with ".yanatests.ps1" and dot-source the tested script.
 # 2. Define your test functions named as "YANAtest:<function>@<scenario>".
 # 3. Use the `pass` and `fail` functions to indicate test results.
 # 4. Execute this script directly to run all tests.
 #   - You can also specify a specific test file and/or test function to run.
-# ---------------------------------------------------------------------------
-param(
-	# The base path to start searching for test files.
-	# Defaults to the current working directory.
-	[string]$TestDir = $PWD,
-	# Test file paths to invoke.
-	# Accepts wildcards to match multiple files.
-	# Defaults to all test files in the current directory and subdirectories.
-	[string]$TestFile = '*',
-	# Test function name(s) to invoke (using pattern 'YANAtest:<function>[@<scenario>]').
-	[string]$TestName = '*',
-	# If specified, outputs log messages to the given file.
-	[string]$LogFile,
-	# If specified, suppresses output messages.
-	[switch]$Quiet,
-	# If specified, disables colored output.
-	[switch]$NoColor
-)
-
-# Disable progress bar output for cleaner test output
-$Global:ProgressPreference = 'SilentlyContinue'
+# -----------------------------------------------------------------------------
 
 <#
 .SYNOPSIS
@@ -56,16 +36,16 @@ function Out-Colored {
 		[switch]$StdErr
 	)
 	if ($Message.Length -gt 0) { $Message = "$Message " }
-	if ($Script:LogFile) {
+	if ($LogFile) {
 		$logMessage = "[$([datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))] ${Message}${MessageDetail}"
 		try {
-			Add-Content -Path $Script:LogFile -Value $logMessage -Force -ErrorAction Ignore
+			Add-Content -Path $LogFile -Value $logMessage -Force -ErrorAction Ignore
 		} catch {
-			Write-Warning "Failed to write to log file '$($Script:LogFile)': $($_.Exception.Message)"
+			Write-Warning "Failed to write to log file '$($LogFile)': $($_.Exception.Message)"
 		}
 	}
-	if ($Script:Quiet -or $Quiet) { return }
-	if ($Script:NoColor) {
+	if ($Quiet) { return }
+	if ($NoColor) {
 		$message = "${Message}$MessageDetail"
 	} else {
 		$colorCode = switch ($Color) {
@@ -94,7 +74,9 @@ function Out-Colored {
 	The YanaTestResult class holds the number of passed and failed tests.
 #>
 class YanaTestResult {
+	# Count of passed tests
 	[int]$Passed = 0
+	# Count of failed tests
 	[int]$Failed = 0
 }
 
@@ -112,20 +94,20 @@ function YANAtest:YanaTestResult@has_passed_and_failed_properties {
 <#
 .SYNOPSIS
 	Discovers test functions based on pattern(s) specified in the $TestName parameter.
-.PARAMETER TestName
-	A test function name to discover. Supports wildcards.
-	Defaults to all test functions in the current session.
 .OUTPUTS
-	Array of test function names that match the specified pattern(s).
+  [string[]] Array of test function names that match the specified pattern(s).
 #>
-function Get-YanaTest([string]$TestName = '*') {
+function Get-YanaTest {
+	param(
+		# A test function name to discover. Supports wildcards.
+		# Defaults to all test functions in the current session.
+		[string]$TestName = '*'
+	)
 	$Local:YANA_testPrefix = 'YANAtest:'
 	$Local:test_patterns = @()
 	if (-not $TestName.StartsWith($Local:YANA_testPrefix)) { $TestName = "$Local:YANA_testPrefix${TestName}" }
 	$Local:test_patterns += "Function:/$TestName"
-	Get-Item $Local:test_patterns -ErrorAction SilentlyContinue | ForEach-Object {
-		$_.Name
-	}
+	Get-Item $Local:test_patterns -ErrorAction SilentlyContinue | ForEach-Object { $_.Name	}
 }
 
 function YANAtest:Get-YanaTest@discover_with_wildcard {
@@ -166,19 +148,21 @@ function YANAtest:Get-YanaTest@no_matching_tests {
 	Discovers test files based on pattern(s) specified in the $TestFile parameter.
 .DESCRIPTION
 	Discovers test files in the current directory and subdirectories.
-.PARAMETER TestDir
-	The base path to start searching for test files.
-	Defaults to the current working directory.
-.PARAMETER TestFile
-	A test file name to discover. Supports wildcards.
-	Defaults to all test files in the current directory and subdirectories.
 .OUTPUTS
-	List of test files that match the specified pattern(s).
+  [string[]] List of test files that match the specified pattern(s).
 #>
-function Get-YanaTestFile([string]$TestDir = $PWD, [string]$TestFile = '*') {
+function Get-YanaTestFile {
+	param(
+		# The base path to start searching for test files.
+		# Defaults to the current working directory.
+		[string]$TestDir = $PWD,
+		# A test file name to discover. Supports wildcards.
+		# Defaults to all test files in the current directory and subdirectories.
+		[string]$TestFile = '*'
+	)
 	if (-not $TestFile.EndsWith('.ps1')) { $TestFile = "${TestFile}.ps1" }
 	try {
-		Get-ChildItem -Path $TestDir -Recurse -Filter '*.ps1' -Include $TestFile -ErrorAction Ignore
+		Get-ChildItem -Path $TestDir -Recurse -Filter '*.ps1' -Include $TestFile -ErrorAction Ignore | Foreach-Object { $_.FullName }
 	} catch { $null }
 }
 
@@ -200,7 +184,7 @@ function YANAtest:Get-YanaTestFile@discover_test_files {
 		$files = Get-YanaTestFile -TestFile '*.ps1' -TestDir $tempDir
 		if ($files.Count -gt 0) { pass 'Found test files' } else { fail 'No test files found' }
 		foreach ($file in $files) {
-			if ($file.FullName -in $testFiles) { pass "Found expected test file: $($file.FullName)" } else { fail "Unexpected test file found: $($file.FullName)" }
+			if ($file -in $testFiles) { pass "Found expected test file: $($file)" } else { fail "Unexpected test file found: $($file)" }
 		}
 	} finally {
 		Remove-Item $tempDir -Recurse -ErrorAction SilentlyContinue
@@ -213,7 +197,6 @@ function YANAtest:Get-YanaTestFile@with_specific_pattern {
 	if ($null -ne $files) { pass 'File discovery returned results' } else { pass 'No files match pattern (expected)' }
 }
 
-
 <#
 .SYNOPSIS
 	Invokes specific test function(s) and captures results.
@@ -223,7 +206,7 @@ function YANAtest:Get-YanaTestFile@with_specific_pattern {
 	A test function name to invoke. Supports wildcards.
 	Defaults to all test functions in the current session.
 .OUTPUTS
-	YanaTestResult with Passed and Failed tests.
+	[YanaTestResult] with Passed and Failed tests.
 #>
 function Invoke-YanaTest([string]$TestName = '*') {
 
@@ -315,17 +298,17 @@ function YANAtest:Invoke-YanaTest@exception_in_test {
 	Invokes tests from a specified test file.
 .DESCRIPTION
 	Sources the specified test file and invokes the tests defined in it.
-.PARAMETER TestFile
-	The path to the test file to invoke.
-.PARAMETER TestName
-	A test function name to invoke. Supports wildcards.
-	Defaults to all tests in the file.
-.PARAMETER Quiet
-	If specified, suppresses output messages.
 .OUTPUTS
-	YanaTestResult with Passed and Failed tests.
+	[YanaTestResult] with Passed and Failed tests.
 #>
-function Invoke-YanaTestFile([string]$TestFile, [string]$TestName = '*') {
+function Invoke-YanaTestFile {
+	param(
+		# The path to the test file to invoke.
+		[string]$TestFile,
+		# A test function name to invoke. Supports wildcards.
+		# Defaults to all tests in the file.
+		[string]$TestName = '*'
+	)
 	$Local:YANA_testResult = [YanaTestResult]::new()
 
 	if ([string]::IsNullOrEmpty($TestFile)) {
@@ -341,7 +324,12 @@ function Invoke-YanaTestFile([string]$TestFile, [string]$TestName = '*') {
 		}
 
 		Out-Colored -StdErr -Color magenta -Message 'Importing tests from file' -MessageDetail $TestFile
-		. $TestFile
+		try {
+			. $TestFile
+		} catch {
+			Out-Colored -StdErr -Color red -Message "Error: Failed to import test file '$TestFile'" -MessageDetail $_.Exception.Message
+			return $Local:YANA_testResult
+		}
 		$Local:YANA_testResult = Invoke-YanaTest -TestName $TestName
 	} else {
 		Out-Colored -StdErr -Color red -Message "Error: Test file '$TestFile' does not exist" -MessageDetail $TestFile
@@ -355,28 +343,49 @@ function Invoke-YanaTestFile([string]$TestFile, [string]$TestName = '*') {
 	The main entry point for running tests.
 .DESCRIPTION
 	Invokes test(s) from the specified test file(s) and collects the results.
-.PARAMETER TestDir
-	The base path to start searching for test files.
-	Defaults to the current working directory.
-.PARAMETER TestFile
-	A test file path to invoke. Supports wildcards.
-	Defaults to all test files in the specified directory and subdirectories.
-.PARAMETER TestName
-	A test function name to invoke. Supports wildcards.
-	Defaults to all tests in the specified test file(s).
-.PARAMETER Quiet
-	If specified, suppresses output messages.
 .OUTPUTS
-	YanaTestResult with Passed and Failed tests.
+	[YanaTestResult] with Passed and Failed tests.
 .NOTES
 	Exits with a non-zero status code if any tests failed.
 #>
-function Invoke-YanaTesting ([string]$TestDir = $PWD, [string]$TestFile = '*', [string]$TestName = '*') {
+function Invoke-YanaTesting {
+	param(
+		# The base path to start searching for test files.
+		# Uses YANA_TESTDIR environment variable if set.
+		# Defaults to the current working directory.
+		[string]$TestDir = $Env:YANA_TESTDIR,
+		# Test file paths to invoke.
+		# Accepts wildcards to match multiple files.
+		# Uses YANA_TESTFILE environment variable if set.
+		# Defaults to all test files in the current directory and subdirectories.
+		[string]$TestFile = $Env:YANA_TESTFILE,
+		# Test function name(s) to invoke (using pattern 'YANAtest:<function>[@<scenario>]').
+		# Accepts wildcards to match multiple tests.
+		# Uses YANA_TESTNAME environment variable if set.
+		# Defaults to all tests in the specified test file(s).
+		[string]$TestName = $Env:YANA_TESTNAME,
+		# If specified, outputs log messages to the given file.
+		# Uses YANA_LOGFILE environment variable if set.
+		[string]$LogFile = $Env:YANA_LOGFILE,
+		# If specified, suppresses output messages.
+		# Uses YANA_QUIET environment variable if set.
+		[switch]$Quiet = [bool]$Env:YANA_QUIET,
+		# If specified, disables colored output.
+		# Uses YANA_NOCOLOR environment variable if set.
+		[switch]$NoColor = [bool]$Env:YANA_NOCOLOR
+	)
+
+	# Disable progress bar output for cleaner test output
+	$Global:ProgressPreference = 'SilentlyContinue'
+
+	if ([string]::IsNullOrEmpty($TestDir)) { $TestDir = $PWD }
+	if ([string]::IsNullOrEmpty($TestFile)) { $TestFile = '*' }
+	if ([string]::IsNullOrEmpty($TestName)) { $TestName = '*' }
 
 	$Local:YANA_testingResult = [YanaTestResult]::new()
 	$Local:YANA_testFiles = Get-YanaTestFile -TestFile $TestFile -TestDir $TestDir
 	foreach ($file in $Local:YANA_testFiles) {
-		$test_result = Invoke-YanaTestFile -TestFile $file.FullName -TestName $TestName
+		$test_result = Invoke-YanaTestFile -TestFile $file -TestName $TestName
 		$Local:YANA_testingResult.Passed += $test_result.Passed
 		$Local:YANA_testingResult.Failed += $test_result.Failed
 	}
@@ -386,5 +395,5 @@ function Invoke-YanaTesting ([string]$TestDir = $PWD, [string]$TestFile = '*', [
 
 # Prevent running when dot-sourced
 if ($MyInvocation.InvocationName -ne '.') {
-	Invoke-YanaTesting -TestDir $TestDir -TestFile $TestFile -TestName $TestName
+	Invoke-YanaTesting @args
 }

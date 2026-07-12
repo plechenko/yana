@@ -62,8 +62,6 @@ function YANAtest:Invoke-YanaTest@with_test_function {
 	if ($YANA_Mock_outBuffer[0].MessageDetail -eq $testFnName) { pass 'Output contains expected test function name' } else { fail "Expected output to contain test function name '$testFnName' but got: $($YANA_Mock_outBuffer[0].MessageDetail)" }
 }
 
-
-
 function YANAtest:Invoke-YanaTestFile@with_valid_content {
 	$testScript = {
 		function YANAtest:TestFunction1@pass {
