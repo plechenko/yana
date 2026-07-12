@@ -27,13 +27,7 @@ function Out-Colored {
 		# The main message to display.
 		[string]$Message,
 		# Additional details to display (optional). Will be displayed in dimmed color.
-		[string]$MessageDetail = '',
-		# # If specified, the text will be bold.
-		# [switch]$Bold,
-		# # If specified, the text will be underlined.
-		# [switch]$Underline,
-		# If specified, the output will be sent to standard error instead of standard output.
-		[switch]$StdErr
+		[string]$MessageDetail = ''
 	)
 	if ($Message.Length -gt 0) { $Message = "$Message " }
 	if ($LogFile) {
@@ -59,12 +53,23 @@ function Out-Colored {
 			'White' { 37 }
 			default { 0 } # Default to no color
 		}
-		$styleCode = ''
-		# if ($Bold) { $styleCode += ';1' }
-		# if ($Underline) { $styleCode += ';4' }
-		$message = "`u{001b}[${colorCode}${styleCode}m${Message}`u{001b}[2m${MessageDetail}`u{001b}[0m"
+		"`u{001b}[${colorCode}m${Message}`u{001b}[2m${MessageDetail}`u{001b}[0m"
 	}
-	if ($StdErr) { [Console]::Error.WriteLine($message) } else { [Console]::Out.WriteLine($message) }
+}
+<#
+.SYNOPSIS
+	Outputs colored text to the console's standard output.
+#>
+function Out-ColoredStdout {
+	if ($local:output = Out-Colored @args) { [Console]::Out.WriteLine($local:output)	}
+}
+
+<#
+.SYNOPSIS
+	Outputs colored text to the console's standard error.
+#>
+function Out-ColoredStderr {
+	if ($local:output = Out-Colored @args) { [Console]::Error.WriteLine($local:output)	}
 }
 
 <#
@@ -222,7 +227,7 @@ function Invoke-YanaTest([string]$TestName = '*') {
 		$caller = (Get-PSCallStack)[1]
 		$location = "$($caller.ScriptName):$($caller.ScriptLineNumber)"
 		if (-not $Message) { $Message = "$($caller.FunctionName) passed" }
-		Out-Colored -StdErr -Color green -Message "`t[√] ${Message}" -MessageDetail $location
+		Out-ColoredStderr -Color green -Message "`t[√] ${Message}" -MessageDetail $location
 		$YANA_subtests_ref.Value.Passed++
 	}
 
@@ -237,7 +242,7 @@ function Invoke-YanaTest([string]$TestName = '*') {
 		$caller = (Get-PSCallStack)[1]
 		$location = "$($caller.ScriptName):$($caller.ScriptLineNumber)"
 		if (-not $Message) { $Message = "$($caller.FunctionName) failed" }
-		Out-Colored -StdErr -Color red -Message "`t[x] ${Message}" -MessageDetail $location
+		Out-ColoredStderr -Color red -Message "`t[x] ${Message}" -MessageDetail $location
 		$YANA_subtests_ref.Value.Failed++
 	}
 
@@ -245,7 +250,7 @@ function Invoke-YanaTest([string]$TestName = '*') {
 	$Local:YANA_testResult = [YanaTestResult]::new()
 	$Local:YANA_subtests = @{}
 	foreach ($YANA_test in $Local:YANA_tests) {
-		Out-Colored -StdErr -Color cyan -Message 'Running test' -MessageDetail $YANA_test
+		Out-ColoredStderr -Color cyan -Message 'Running test' -MessageDetail $YANA_test
 		$Local:YANA_subtests[$YANA_test] = [YanaTestResult]::new()
 		$Local:YANA_subtests_ref = [ref]$Local:YANA_subtests[$YANA_test]
 		try {
@@ -258,7 +263,7 @@ function Invoke-YanaTest([string]$TestName = '*') {
 		} else {
 			$Local:YANA_testResult.Failed++
 		}
-		Out-Colored -StdErr -Color yellow -Message "`t`tSub-tests Passed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $YANA_test
+		Out-ColoredStderr -Color yellow -Message "`t`tSub-tests Passed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $YANA_test
 		$Local:YANA_subtests_ref = $null
 		$Local:YANA_subtests.Remove($YANA_test)
 	}
@@ -314,7 +319,7 @@ function Invoke-YanaTestFile {
 	$Local:YANA_testResult = [YanaTestResult]::new()
 
 	if ([string]::IsNullOrEmpty($TestFile)) {
-		Out-Colored -StdErr -Color red -Message 'Error: Test file parameter is required'
+		Out-ColoredStderr -Color red -Message 'Error: Test file parameter is required'
 		return $Local:YANA_testResult
 	}
 
@@ -325,16 +330,16 @@ function Invoke-YanaTestFile {
 			if (Test-Path $fn) { Remove-Item $fn -ErrorAction SilentlyContinue }
 		}
 
-		Out-Colored -StdErr -Color magenta -Message 'Importing tests from file' -MessageDetail $TestFile
+		Out-ColoredStderr -Color magenta -Message 'Importing tests from file' -MessageDetail $TestFile
 		try {
 			. $TestFile
 		} catch {
-			Out-Colored -StdErr -Color red -Message "Error: Failed to import test file '$TestFile'" -MessageDetail $_.Exception.Message
+			Out-ColoredStderr -Color red -Message "Error: Failed to import test file '$TestFile'" -MessageDetail $_.Exception.Message
 			return $Local:YANA_testResult
 		}
 		$Local:YANA_testResult = Invoke-YanaTest -TestName $TestName
 	} else {
-		Out-Colored -StdErr -Color red -Message "Error: Test file '$TestFile' does not exist" -MessageDetail $TestFile
+		Out-ColoredStderr -Color red -Message "Error: Test file '$TestFile' does not exist" -MessageDetail $TestFile
 	}
 
 	$Local:YANA_testResult
