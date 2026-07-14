@@ -31,14 +31,12 @@ jobs:
       - name: Set Version in YANA scripts
         shell: bash
         run: |
-          VERSION="${GITHUB_REF#v}"
+          VERSION="${GITHUB_REF_NAME#v}"
           for file in yana-test.sh yana-test.ps1 yana.sh yana.ps1; do
             [[ -f "$file" ]] || continue
             echo "Setting version to '${VERSION}' in $file"
             sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" "$file"
           done
-        env:
-          GITHUB_REF: ${{ github.ref_name }}
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
