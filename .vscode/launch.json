@@ -13,11 +13,11 @@
             "terminalKind": "integrated"
         },
         {
+            "name": "Bash-Debug (yana-test)",
             "type": "bashdb",
             "request": "launch",
-            "name": "Bash-Debug (yana-tests)",
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/yana_tests.sh",
+            "program": "${workspaceFolder}/yana-test.sh",
             "args": [
                 "-testfile",
                 "${relativeFile}"
@@ -29,14 +29,14 @@
             "type": "PowerShell",
             "request": "launch",
             "script": "${file}",
-            "cwd": "${cwd}",
+            "cwd": "${workspaceFolder}",
             "createTemporaryIntegratedConsole": true
         },
         {
-            "name": "PowerShell (yana-tests)",
+            "name": "PowerShell (yana-test)",
             "type": "PowerShell",
             "request": "launch",
-            "script": "${workspaceFolder}/yana_tests.ps1",
+            "script": "${workspaceFolder}/yana-test.ps1",
             "cwd": "${workspaceFolder}",
             "args": [
                 "-testfile",

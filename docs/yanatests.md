@@ -124,7 +124,7 @@ YANAtest:my_command@throws_on_bad_input() {
 
 ## Running Tests
 
-To run tests, execute the `yana_tests.ps1` or `yana_tests.sh` script. In the following examples it will be referenced as `yana_tests`.
+To run tests, execute the `yana-test.ps1` or `yana-test.sh` script. In the following examples it will be referenced as `yana-test`.
 
 > PowerShell and Bash versions support the same command-line arguments.
 
@@ -135,7 +135,7 @@ The process will exit with code `1` if any of the tests fail, or `0` if all test
 ### Run all tests in the current directory tree
 
 ```bash
-yana_tests
+yana-test
 ```
 
 ### Run all tests in a specific directory
@@ -143,7 +143,7 @@ yana_tests
 Use `-testdir` argument or `YANA_TESTDIR` environment variable to specify a directory to search for test files.
 
 ```bash
-yana_tests -testdir './tests'
+yana-test -testdir './tests'
 ```
 
 ### Run a specific test file
@@ -152,8 +152,8 @@ Use the `-testfile` argument or `YANA_TESTFILE` environment variable to specify 
 You can use wildcards to match multiple files.
 
 ```bash
-yana_tests -testfile './mymodule.yanatests.ps1'
-yana_tests -testfile './mymodule*'
+yana-test -testfile './mymodule.yanatests.ps1'
+yana-test -testfile './mymodule*'
 ```
 
 ### Run a specific test by name
@@ -162,8 +162,8 @@ By using the `-testname` argument or `YANA_TESTNAME` environment variable, you c
 You can use wildcards to match multiple tests.
 
 ```bash
-yana_tests -testname 'MyCommand'
-yana_tests -testname 'MyCommand@*'
+yana-test -testname 'MyCommand'
+yana-test -testname 'MyCommand@*'
 ```
 
 ### Output test results to a log file
@@ -172,7 +172,7 @@ Use the `-logfile` argument or `YANA_LOGFILE` environment variable to specify a 
 If the file already exists, it will be appended.
 
 ```bash
-yana_tests -logfile './test_results.log'
+yana-test -logfile './test_results.log'
 ```
 
 ### Suppress output
@@ -182,7 +182,7 @@ If `-quiet` is specified, only the summary of test results will be printed.
 If `-logfile` is also specified, all output messages will be written to the log file.
 
 ```bash
-yana_tests -quiet
+yana-test -quiet
 ```
 
 ### Suppress ANSI color codes
@@ -190,5 +190,5 @@ yana_tests -quiet
 Use the `-nocolor` argument or `YANA_NOCOLOR` environment variable to suppress ANSI color codes.
 
 ```bash
-yana_tests -nocolor
+yana-test -nocolor
 ```

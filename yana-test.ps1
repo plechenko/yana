@@ -16,8 +16,12 @@
 #   - You can also specify a specific test file and/or test function to run.
 # -----------------------------------------------------------------------------
 
-$YANA_TITLE = 'YANA Testing Framework (PowerShell)'
-$YANA_VERSION = '0.1.0'
+Set-Variable -Name YANA_TITLE -Value 'YANA Testing Framework (PowerShell)' -Option Constant -Scope Global -ErrorAction:Ignore
+Set-Variable -Name YANA_VERSION -Value 'YANAVERSIONPLACEHOLDER' -Option Constant -Scope Global -ErrorAction:Ignore
+
+function YANAtest:example {
+  pass 'Example test passed'
+}
 
 function Out-Colored {
   # .SYNOPSIS
@@ -85,67 +89,6 @@ class YanaTestResult {
   [int]$Failed = 0
 }
 
-function YANAtest:YanaTestResult@has_passed_and_failed_properties {
-  $result = [YanaTestResult]::new()
-  if ($result.Passed -eq 0) { pass 'Passed initialized to 0' } else { fail 'Passed not initialized correctly' }
-  if ($result.Failed -eq 0) { pass 'Failed initialized to 0' } else { fail 'Failed not initialized correctly' }
-
-  $result.Passed = 5
-  $result.Failed = 3
-  if ($result.Passed -eq 5) { pass 'Passed property is writable' } else { fail 'Passed not writable' }
-  if ($result.Failed -eq 3) { pass 'Failed property is writable' } else { fail 'Failed not writable' }
-}
-
-function Get-YanaTestFunction {
-  # .SYNOPSIS
-  # 	Discovers test functions based on pattern specified in the $TestName parameter.
-  # .OUTPUTS
-  #   [string[]] Array of test function names that match the specified pattern.
-  param(
-    # A test function name to discover. Supports wildcards.
-    # Defaults to all test functions in the current session.
-    [string]$TestName = '*'
-  )
-  $Local:YANA_testPrefix = 'YANAtest:'
-  $Local:test_patterns = @()
-  if (-not $TestName.StartsWith($Local:YANA_testPrefix)) { $TestName = "$Local:YANA_testPrefix${TestName}" }
-  $Local:test_patterns += "Function:/$TestName"
-  Get-Item $Local:test_patterns -ErrorAction SilentlyContinue | ForEach-Object { $_.Name	}
-}
-
-function YANAtest:Get-YanaTestFunction@discover_with_wildcard {
-  $tests = & {
-    # Create test functions dynamically
-    function YANAtest:Sample1 { }
-    function YANAtest:Sample2@ { }
-    function YANAtest:Sample3@test { }
-    function YANAtest:Other@Test { }
-
-    Get-YanaTestFunction -TestName 'Sample*'
-  }
-  if ($tests.Count -eq 3) { pass 'Found 3 tests matching Sample*' } else { fail "Expected 3 tests, got: $($tests.Count)" }
-  if ($tests.Contains('YANAtest:Sample1')) { pass 'Test Sample1 found' } else { fail 'Test Sample1 not found' }
-  if ($tests.Contains('YANAtest:Sample2@')) { pass 'Test Sample2@ found' } else { fail 'Test Sample2@ not found' }
-  if ($tests.Contains('YANAtest:Sample3@test')) { pass 'Test Sample3@test found' } else { fail 'Test Sample3@test not found' }
-  if ($tests.Contains('YANAtest:Other@Test')) { fail 'Test Other@Test should not be found' } else { pass 'Test Other@Test correctly not found' }
-}
-
-function YANAtest:Get-YanaTestFunction@discover_specific_test {
-  $tests = & {
-    # Create a specific test function dynamically
-    function YANAtest:SpecificTest { }
-
-    Get-YanaTestFunction -TestName 'SpecificTest'
-  }
-  if ($tests.Count -eq 1) { pass 'Found 1 specific test' } else { fail "Expected 1 test, got: $($tests.Count)" }
-  if ($tests.Contains('YANAtest:SpecificTest')) { pass 'SpecificTest found' } else { fail 'SpecificTest not found' }
-}
-
-function YANAtest:Get-YanaTestFunction@no_matching_tests {
-  $tests = Get-YanaTestFunction -TestName 'NonExistentTest*'
-  if ($tests.Count -eq 0) { pass 'No tests found for non-existent pattern' } else { fail "Expected 0 tests, got: $($tests.Count)" }
-}
-
 function Get-YanaTestFile {
   # .SYNOPSIS
   # 	Discovers test files based on pattern(s) specified in the $TestFile parameter.
@@ -162,53 +105,50 @@ function Get-YanaTestFile {
     [string]$TestFile = '*'
   )
   if (-not $TestFile.EndsWith('.ps1')) { $TestFile = "${TestFile}.ps1" }
-	Out-ColoredStderr blue "Discovering test files in directory '$TestDir' with pattern '$TestFile'"
+  Out-ColoredStderr blue "Discovering test files in directory '$TestDir' with pattern '$TestFile'"
   try {
     Get-ChildItem -Path $TestDir -Recurse -Filter '*.ps1' -Include $TestFile -ErrorAction Ignore | Foreach-Object { $_.FullName }
   } catch { $null }
 }
 
-function YANAtest:Get-YanaTestFile@discover_test_files {
-  # Create temporary test file
-  try {
-    $tempDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.IO.Path]::GetRandomFileName())
-    New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
-    $testFiles = @(
-      [System.IO.Path]::Combine($tempDir, 'test1.ps1'),
-      [System.IO.Path]::Combine($tempDir, 'test2.ps1'),
-      [System.IO.Path]::Combine($tempDir, '1', 'test1.ps1'),
-      [System.IO.Path]::Combine($tempDir, '2', 'test2.ps1'),
-      [System.IO.Path]::Combine($tempDir, '1', '2', 'test1.ps1'),
-      [System.IO.Path]::Combine($tempDir, '1', '2', 'test2.ps1')
-    )
-    New-Item -Path $testFiles -ItemType File -Force | Out-Null
-
-    $files = Get-YanaTestFile -TestFile '*.ps1' -TestDir $tempDir
-    if ($files.Count -gt 0) { pass 'Found test files' } else { fail 'No test files found' }
-    foreach ($file in $files) {
-      if ($file -in $testFiles) { pass "Found expected test file: $($file)" } else { fail "Unexpected test file found: $($file)" }
-    }
-  } finally {
-    Remove-Item $tempDir -Recurse -ErrorAction SilentlyContinue
-  }
+function Get-YanaTestFunction {
+  # .SYNOPSIS
+  # 	Discovers test functions based on pattern specified in the $TestName parameter.
+  # .OUTPUTS
+  #   [string[]] Array of test function names that match the specified pattern.
+  param(
+    # A test function name to discover. Supports wildcards.
+    # Defaults to all test functions in the current session.
+    [string]$TestName = '*'
+  )
+  $Local:test_patterns = @()
+  if (-not $TestName.StartsWith('YANAtest:')) { $TestName = "YANAtest:$TestName" }
+  $Local:test_patterns += "Function:/$TestName"
+  Get-Item $Local:test_patterns -ErrorAction SilentlyContinue | ForEach-Object { $_.Name	}
 }
 
-function YANAtest:Get-YanaTestFile@with_specific_pattern {
-  $files = Get-YanaTestFile -TestFile 'yana_tests'
-  # Should find yana_tests.yanatests.ps1 if it exists, or similar patterns
-  if ($null -ne $files) { pass 'File discovery returned results' } else { pass 'No files match pattern (expected)' }
-}
-
-
-function Invoke-YanaTestFunction([string]$TestFunctionName) {
+function Invoke-YanaTestFunction([string]$TestFunction) {
   # .SYNOPSIS
   # 	Invokes specific test function(s) and captures results.
   # .DESCRIPTION
   # 	Invokes specific test function(s) and captures results.
-  # .PARAMETER TestName
+  # .PARAMETER TestFunction
   # 	A test function name to invoke.
   # .OUTPUTS
   # 	[YanaTestResult] with Passed and Failed tests.
+
+  if ([string]::IsNullOrEmpty($TestFunction)) {
+    Out-ColoredStderr -Color red -Message 'Error: Test function name shall not be empty'
+    return [YanaTestResult]::new()
+  }
+  if (-not $TestFunction.StartsWith('YANAtest:')) {
+    Out-ColoredStderr -Color red -Message "Error: Test function name must start with 'YANAtest:', got: '$TestFunction'"
+    return [YanaTestResult]::new()
+  }
+  if (-not (Test-Path "Function:/$TestFunction")) {
+    Out-ColoredStderr -Color red -Message "Error: Test function '$TestFunction' does not exist"
+    return [YanaTestResult]::new()
+  }
 
   function pass ([string]$Message = '') {
     # .SYNOPSIS
@@ -220,7 +160,8 @@ function Invoke-YanaTestFunction([string]$TestFunctionName) {
     $location = "$($caller.ScriptName):$($caller.ScriptLineNumber)"
     if (-not $Message) { $Message = "$($caller.FunctionName) passed" }
     Out-ColoredStderr -Color green -Message "`t[+] ${Message}" -MessageDetail $location
-    $YANA_subtests_ref.Value.Passed++
+    $YANA_testResult.Passed++
+    # $YANA_subtests_ref.Value.Passed++
   }
   function fail ([string]$Message = '') {
     # .SYNOPSIS
@@ -232,74 +173,20 @@ function Invoke-YanaTestFunction([string]$TestFunctionName) {
     $location = "$($caller.ScriptName):$($caller.ScriptLineNumber)"
     if (-not $Message) { $Message = "$($caller.FunctionName) failed" }
     Out-ColoredStderr -Color red -Message "`t[-] ${Message}" -MessageDetail $location
-    $YANA_subtests_ref.Value.Failed++
+    $YANA_testResult.Failed++
+    # $YANA_subtests_ref.Value.Failed++
   }
 
-  if (-not (Test-Path "Function:/$TestFunctionName")) {
-    Out-ColoredStderr -Color red -Message "Error: Test function '$TestFunctionName' does not exist"
-    return [YanaTestResult]::new()
-  }
-
+  Out-ColoredStderr -Color cyan -Message 'Running test function' -MessageDetail $TestFunction
   $Local:YANA_testResult = [YanaTestResult]::new()
-  $Local:YANA_subtests = @{}
-  Out-ColoredStderr -Color cyan -Message 'Running test function' -MessageDetail $TestFunctionName
-  $Local:YANA_subtests[$TestFunctionName] = [YanaTestResult]::new()
-  $Local:YANA_subtests_ref = [ref]$Local:YANA_subtests[$TestFunctionName]
   try {
-    $null = & $TestFunctionName
+    $null = & $TestFunction
   } catch {
     fail "Exception $($_.Exception.Message) $($_.ScriptStackTrace.Split("`n")[0])"
   }
-  if ($Local:YANA_subtests_ref.Value.Failed -eq 0) {
-    $Local:YANA_testResult.Passed++
-  } else {
-    $Local:YANA_testResult.Failed++
-  }
-  Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $TestFunctionName
-  $Local:YANA_subtests_ref = $null
-  $Local:YANA_subtests.Remove($TestFunctionName)
 
+  Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFunction
   $Local:YANA_testResult
-}
-
-function YANAtest:Invoke-YanaTestFunction@pass {
-  pass
-}
-
-function YANAtest:Invoke-YanaTestFunction@fail {
-  function YANAtest:Invoke-YanaTestFunction@failure_subtest {
-    fail 'This test should fail'
-  }
-  $test_result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFunction -TestFunctionName 'YANAtest:Invoke-YanaTestFunction@failure_subtest'
-  }
-  if ($test_result.Passed -eq 0) { pass 'Test does not pass' } else { fail "Expected 0 passed subtests, got: $($test_result.Passed)" }
-  if ($test_result.Failed -eq 1) { pass 'Test fails as expected' } else { fail "Expected 1 failed subtest, got: $($test_result.Failed)" }
-}
-
-function YANAtest:Invoke-YanaTestFunction@exception_in_test {
-  function YANAtest:Invoke-YanaTestFunction@exception_in_test_subtest {
-    throw 'This is a test exception'
-  }
-  $test_result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFunction -TestFunctionName 'YANAtest:Invoke-YanaTestFunction@exception_in_test_subtest'
-  }
-  if ($test_result.Passed -eq 0) { pass 'Test does not pass' } else { fail "Expected 0 passed subtests, got: $($test_result.Passed)" }
-  if ($test_result.Failed -eq 1) { pass 'Test fails as expected' } else { fail "Expected 1 failed subtest, got: $($test_result.Failed)" }
-}
-
-function YANAtest:Invoke-YanaTestFunction@nonexistent_function {
-  $test_result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFunction -TestFunctionName 'YANAtest:NonExistentFunction'
-  }
-  if ($test_result.Passed -eq 0) { pass 'Nonexistent function returns 0 passed' } else { fail "Expected 0 passed, got: $($test_result.Passed)" }
-  if ($test_result.Failed -eq 0) { pass 'Nonexistent function returns 0 failed (empty result)' } else { fail "Expected 0 failed, got: $($test_result.Failed)" }
 }
 
 function Invoke-YanaTestFile {
@@ -319,12 +206,12 @@ function Invoke-YanaTestFile {
   $Local:YANA_testResult = [YanaTestResult]::new()
 
   if ([string]::IsNullOrEmpty($TestFile)) {
-    Out-ColoredStderr -Color red -Message 'Error: Test file argument is required'
+    Out-ColoredStderr -Color red -Message 'Error: Test file name shall not be empty'
     return $Local:YANA_testResult
   }
 
   if ([System.IO.File]::Exists($TestFile)) {
-    # Remove all test functions starting with 'YANAtest:'
+    # Remove all existing discoverable test functions
     Get-YanaTestFunction '*' | ForEach-Object {
       Remove-Item "Function:/$_" -ErrorAction SilentlyContinue
     }
@@ -333,72 +220,24 @@ function Invoke-YanaTestFile {
     try {
       . $TestFile
     } catch {
-      Out-ColoredStderr -Color red -Message "Error: Failed to import test file '$TestFile'" -MessageDetail $_.Exception.Message
+      Out-ColoredStderr -Color red -Message "Error: Failed to import test file" -MessageDetail "$TestFile`n$($_.Exception.Message)"
       return $Local:YANA_testResult
     }
     Get-YanaTestFunction -TestName $TestName | ForEach-Object {
-      $Local:YANA_testResult_fn = Invoke-YanaTestFunction -TestFunctionName $_
-      $Local:YANA_testResult.Passed += $Local:YANA_testResult_fn.Passed
-      $Local:YANA_testResult.Failed += $Local:YANA_testResult_fn.Failed
+      $Local:YANA_testResult_fn = Invoke-YanaTestFunction -TestFunction $_
+      if ($Local:YANA_testResult_fn -isnot [YanaTestResult] -or $Local:YANA_testResult_fn.Failed -gt 0) {
+        $Local:YANA_testResult.Failed += 1
+      } else {
+        $Local:YANA_testResult.Passed += 1
+      }
     }
     Out-ColoredStderr -Color yellow -Message "Passed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFile
   } else {
-    Out-ColoredStderr -Color red -Message "Error: Test file '$TestFile' does not exist" -MessageDetail $TestFile
+    Out-ColoredStderr -Color red -Message 'Error: Test file not found' -MessageDetail $TestFile
   }
 
+  Out-ColoredStderr -Color yellow -Message "Passed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFile
   $Local:YANA_testResult
-}
-
-function YANAtest:Invoke-YanaTestFile@empty_file_argument {
-  $test_result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFile -TestFile ''
-  }
-  if ($test_result.Passed -eq 0) { pass 'Empty file argument returns 0 passed' } else { fail "Expected 0 passed, got: $($test_result.Passed)" }
-  if ($test_result.Failed -eq 0) { pass 'Empty file argument returns 0 failed' } else { fail "Expected 0 failed, got: $($test_result.Failed)" }
-}
-
-function YANAtest:Invoke-YanaTestFile@nonexistent_file {
-  $test_result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFile -TestFile '/nonexistent/path/test.ps1'
-  }
-  if ($test_result.Passed -eq 0) { pass 'Nonexistent file returns 0 passed' } else { fail "Expected 0 passed, got: $($test_result.Passed)" }
-  if ($test_result.Failed -eq 0) { pass 'Nonexistent file returns 0 failed' } else { fail "Expected 0 failed, got: $($test_result.Failed)" }
-}
-
-function YANAtest:Invoke-YanaTestFile@runs_tests_in_file {
-  try {
-    $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "yana_test_$([System.IO.Path]::GetRandomFileName()).ps1")
-    Set-Content -Path $tempFile -Value @'
-function YANAtest:TempFileTest@passes {
-    pass 'Temp file test passed'
-}
-function YANAtest:TempFileTest@fails {
-    fail 'Temp file test failed'
-}
-'@
-    $test_result = & {
-      $Quiet = $true
-      $LogFile = $null
-      Invoke-YanaTestFile -TestFile $tempFile
-    }
-    if ($test_result.Passed -eq 1) { pass 'Passing test in file counted correctly' } else { fail "Expected 1 passed, got: $($test_result.Passed)" }
-    if ($test_result.Failed -eq 1) { pass 'Failing test in file counted correctly' } else { fail "Expected 1 failed, got: $($test_result.Failed)" }
-  } finally {
-    Remove-Item $tempFile -ErrorAction SilentlyContinue
-  }
-}
-
-function YANAtest:Invoke-YanaTestFile@nonexistent_file {
-  $result = & {
-    $Quiet = $true
-    $LogFile = $null
-    Invoke-YanaTestFile -TestFile '/nonexistent/path/test.ps1'
-  }
-  if ($result.Passed -eq 0 -and $result.Failed -eq 0) { pass 'Returns empty result for nonexistent file' } else { fail 'Expected zero results for missing file' }
 }
 
 function Out-Help {

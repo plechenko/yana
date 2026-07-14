@@ -86,7 +86,7 @@ The following events are supported:
 
 ## YANA Testing Framework
 
-YANA includes Testing Framework that allows you to write unit tests for your actions, helpers and verifiers. Tests are written in PowerShell/Bash and can be executed using the `yana_tests` command (later `yana-tool test`).
+YANA includes Testing Framework that allows you to write unit tests for your actions, helpers and verifiers. Tests are written in PowerShell/Bash and can be executed using the `yana-test` command (later `yana-tool test`).
 
 All YANA internal functions are unit-tested using the YANA Testing Framework. You can use read the code and tests to learn how to use YANA Testing Framework to write your own tests for your actions, helpers and verifiers.
 
