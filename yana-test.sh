@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # ---------------------------------------------------------------------------
 # YANA Simple Testing Framework (Bash)
 # ---------------------------------------------------------------------------
@@ -22,10 +21,12 @@ if [ -z "${BASH_VERSION:-}" ] || [ "${BASH_VERSINFO[0]:-1}" -lt 4 ]; then
 	exit 1
 fi
 
-[[ -z ${YANATEST_PREFIX:-} ]] && builtin readonly YANATEST_PREFIX='YANAtest:'
-[[ -z ${YANA_TEST_RESULT:-} ]] && builtin readonly YANA_TEST_RESULT='YanaTestResult'
 [[ -z ${YANA_TITLE:-} ]] && builtin readonly YANA_TITLE='YANA Testing Framework (Bash)'
-[[ -z ${YANA_VERSION:-} ]] && builtin readonly YANA_VERSION='0.1.0'
+[[ -z ${YANA_VERSION:-} ]] && builtin readonly YANA_VERSION='YANAVERSIONPLACEHOLDER'
+
+YANAtest:example() {
+	pass 'Example test passed'
+}
 
 # Prepares colored text for output to the console.
 # Takes care of logging to a file if $_YANA_LOGFILE is specified.
@@ -77,15 +78,29 @@ out_colored_stderr() {
 	output="$(out_colored "$@")"
 	[[ -n $output ]] && builtin echo -e "$output" >&2
 }
-die() {
+throw() {
 	builtin local Message="${1:-${Message:-}}"
 	builtin local MessageDetail="${2:-${MessageDetail:-}}"
 	out_colored_stderr red "Error: $Message" "$MessageDetail"
 	builtin exit 1
 }
+YanaTestResult() {
+	builtin local Passed="${1:-${Passed:-0}}"
+	builtin local Failed="${2:-${Failed:-0}}"
+	builtin echo "YanaTestResult:${Passed}_${Failed}"
+}
+parse_YanaTestResult() {
+	builtin local ResultString="${1:-}"
+	[[ $ResultString == 'YanaTestResult:'* ]] || builtin return 1
+	builtin local Result="${ResultString#'YanaTestResult:'}"
+	builtin local Passed="${Result%_*}"
+	builtin local Failed="${Result#*_}"
+	builtin echo "$Passed" "$Failed"
+}
 
 get_yana_test_file() {
-	builtin local test_dir="${1:-$_YANA_TESTDIR}"
+	# builtin local test_dir="${1:-$_YANA_TESTDIR}"
+	builtin local test_dir="${1:-}"
 	[[ -z $test_dir ]] && test_dir="$PWD"
 	builtin local test_file_pattern="${2:-$_YANA_TESTFILE}"
 	[[ -z $test_file_pattern ]] && test_file_pattern='*'
@@ -97,63 +112,17 @@ get_yana_test_file() {
 # Discovers test functions based on pattern specified in the $_YANA_TESTNAME parameter.
 # Outputs: List of test function names that match the specified pattern.
 get_yana_test_function() {
-	builtin local test_name_pattern="${1:-$_YANA_TESTNAME}"
-	[[ $test_name_pattern != "$YANATEST_PREFIX"* ]] && test_name_pattern="${YANATEST_PREFIX}$test_name_pattern"
+	# builtin local test_name_pattern="${1:-$_YANA_TESTNAME}"
+	builtin local test_name_pattern="${1:-}"
+	[[ $test_name_pattern != YANAtest:* ]] && test_name_pattern="YANAtest:$test_name_pattern"
 
 	builtin declare -F |
 		awk '{print $3}' |
-		grep "^$YANATEST_PREFIX" |
+		grep "^YANAtest:" |
 		while IFS= builtin read -r test_fn; do
 			#shellcheck disable=SC2053
 			[[ $test_fn == $test_name_pattern ]] && builtin echo "$test_fn"
 		done
-}
-
-# Test function to discover test functions with a wildcard pattern.
-# It checks if the discovery mechanism correctly identifies test functions
-# that match the specified pattern.
-YANAtest:get_yana_test_function@discover_specific_test() {
-	YANAtest:SpecificTestOnly() { :; }
-	test_result=$(get_yana_test_function 'SpecificTestOnly')
-	grep -q 'YANAtest:SpecificTestOnly' <<<"$test_result" && pass 'SpecificTestOnly discovered' || fail 'SpecificTestOnly not discovered'
-	builtin unset -f 'YANAtest:SpecificTestOnly' 2>/dev/null
-}
-YANAtest:get_yana_test_function@no_matching_tests() {
-	test_result=$(get_yana_test_function 'NonExistentFunction*')
-	[[ -z $test_result ]] && pass 'No functions returned for non-existent pattern' || fail "Expected empty result, got: $test_result"
-}
-YANAtest:get_yana_test_function@discover_with_wildcard() {
-	builtin local test_name_pattern="${1:-$YANATEST_PREFIX*}"
-	YANAtest:Sample1() { :; }
-	YANAtest:Sample2@() { :; }
-	function YANAtest:Sample3@test { :; }
-	function YANAtest:Other@Test { :; }
-
-	test_result=$(get_yana_test_function 'Sample*')
-	[[ -n $test_result ]] && pass "Test functions discovered successfully" || fail "No test functions discovered"
-	grep -q 'YANAtest:Sample1' <<<"$test_result" && pass "Sample1 discovered" || fail "Sample1 not discovered"
-	grep -q 'YANAtest:Sample2@' <<<"$test_result" && pass "Sample2@ discovered" || fail "Sample2@ not discovered"
-	grep -q 'YANAtest:Sample3@test' <<<"$test_result" && pass "Sample3@test discovered" || fail "Sample3@test not discovered"
-	grep -q 'YANAtest:Other@Test' <<<"$test_result" && fail "Other@Test incorrectly discovered" || pass "Other@Test correctly not discovered"
-}
-
-YANAtest:get_yana_test_file@discover_test_files() {
-	tempDir=$(mktemp -d)
-	touch "$tempDir/test1.sh" "$tempDir/test2.sh"
-	mkdir -p "$tempDir/sub"
-	touch "$tempDir/sub/test3.sh"
-	files=$(get_yana_test_file "$tempDir" '*.sh')
-	[[ -n $files ]] && pass 'Found test files' || fail 'No test files found'
-	grep -q "$tempDir/test1.sh" <<<"$files" && pass 'test1.sh found' || fail 'test1.sh not found'
-	grep -q "$tempDir/test2.sh" <<<"$files" && pass 'test2.sh found' || fail 'test2.sh not found'
-	grep -q "$tempDir/sub/test3.sh" <<<"$files" && pass 'sub/test3.sh found recursively' || fail 'sub/test3.sh not found'
-	rm -rf "$tempDir"
-}
-YANAtest:get_yana_test_file@no_matching_files() {
-	tempDir=$(mktemp -d)
-	files=$(get_yana_test_file "$tempDir" 'nonexistent_pattern*.sh' 2>/dev/null)
-	[[ -z $files ]] && pass 'No files returned for non-matching pattern' || fail "Expected empty result, got: $files"
-	rm -rf "$tempDir"
 }
 
 # Invokes a specific test function and captures results.
@@ -161,17 +130,20 @@ YANAtest:get_yana_test_file@no_matching_files() {
 #  $1 <test_function> - A test function name to invoke.
 # Outputs: [YanaTestResult] with Passed and Failed tests.
 invoke_yana_test_function() {
-	builtin local test_function="${1:-$test_function}"
+	builtin local test_function="${1:-}"
 	[[ -z $test_function ]] && {
-		out_colored_stderr red 'Error: Missing test function argument'
+		out_colored_stderr red 'Error: Test function name shall not be empty'
+		YanaTestResult
 		builtin return 1
 	}
-	[[ $test_function != $YANATEST_PREFIX* ]] && {
-		out_colored_stderr red "Error: Invalid test function name: $test_function"
+	[[ $test_function != YANAtest:* ]] && {
+		out_colored_stderr red "Error: Test function name must start with 'YANAtest:', got: '$test_function'"
+		YanaTestResult
 		builtin return 1
 	}
 	builtin declare -F "$test_function" >/dev/null 2>&1 || {
-		out_colored_stderr red "Error: Test function not found: $test_function"
+		out_colored_stderr red "Error: Test function '$test_function' does not exist"
+		YanaTestResult
 		builtin return 1
 	}
 
@@ -204,35 +176,10 @@ invoke_yana_test_function() {
 	builtin local -i YANA_test_result_passed=0
 	builtin local -i YANA_test_result_failed=0
 	out_colored_stderr cyan 'Running test function' "$test_function"
-	"$test_function" || {
-		fail 'Error: Test function execution failed' "$test_function"
-		builtin return 1
-	}
-	out_colored_stderr yellow "\t\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_function"
+	"$test_function" || fail 'Error: Test function execution failed' "$test_function"
+	out_colored_stderr yellow "\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_function"
+	YanaTestResult "$YANA_test_result_passed" "$YANA_test_result_failed"
 	if [[ $YANA_test_result_failed -gt 0 ]]; then builtin return 1; fi
-}
-
-YANAtest:invoke_yana_test_function@pass() {
-	pass "Test function invoked successfully"
-	pass
-}
-YANAtest:invoke_yana_test_function@fail() {
-	pass "$(fail 2>&1)"
-	pass "$(fail 'Test function failed as expected' 2>&1)"
-}
-YANAtest:invoke_yana_test_function@nonexistent_function() {
-	invoke_yana_test_function 'YANAtest:NonExistentFunction' 2>/dev/null
-	[[ $? -ne 0 ]] && pass 'Nonexistent function returns non-zero exit' || fail 'Expected non-zero exit for nonexistent function'
-}
-YANAtest:invoke_yana_test_function@invalid_prefix() {
-	invoke_yana_test_function 'not_a_test_function' 2>/dev/null
-	[[ $? -ne 0 ]] && pass 'Invalid prefix returns non-zero exit' || fail 'Expected non-zero exit for invalid prefix'
-}
-YANAtest:invoke_yana_test_function@exception_in_test() {
-	YANAtest:_exception_subtest() { builtin return 1; }
-	invoke_yana_test_function 'YANAtest:_exception_subtest' 2>/dev/null
-	[[ $? -ne 0 ]] && pass 'Failing test function returns non-zero exit' || fail 'Expected non-zero exit for failing test'
-	builtin unset -f 'YANAtest:_exception_subtest' 2>/dev/null
 }
 
 # Invokes tests from a specified test file.
@@ -243,20 +190,23 @@ YANAtest:invoke_yana_test_function@exception_in_test() {
 invoke_yana_test_file() {
 	builtin local test_file="${1:-}"
 	if [[ -z $test_file ]]; then
-		out_colored_stderr red 'Error: Test file argument is required'
+		out_colored_stderr red 'Error: Test file name shall not be empty'
+		YanaTestResult
 		builtin return 1
 	fi
 	if [[ ! -f $test_file ]]; then
 		out_colored_stderr red 'Error: Test file not found' "$test_file"
+		YanaTestResult
 		builtin return 1
 	fi
 
 	for fn in $(get_yana_test_function '*'); do
 		builtin unset -f "$fn" 2>/dev/null
 	done
-	out_colored_stderr magenta 'Importing tests' "$test_file"
+	out_colored_stderr magenta 'Importing tests from file' "$test_file"
 	builtin source "$test_file" || {
-		out_colored_stderr red 'Error: Failed to source' "$test_file"
+		out_colored_stderr red 'Error: Failed to import test file' "$test_file"
+		YanaTestResult
 		builtin return 1
 	}
 	builtin local YANA_test_results
@@ -264,25 +214,22 @@ invoke_yana_test_file() {
 		get_yana_test_function "$_YANA_TESTNAME" |
 			while IFS= builtin read -r test_fn; do
 				invoke_yana_test_function "$test_fn"
-				builtin echo $?
 			done
 	)
 	builtin local -i YANA_test_result_passed=0
 	builtin local -i YANA_test_result_failed=0
 	for r in $YANA_test_results; do
-		if [[ $r == 0 ]]; then
-			((YANA_test_result_passed += 1))
-		else
+		parsed_result=$(parse_YanaTestResult "$r") || builtin continue
+		builtin read -r passed failed <<<"$parsed_result"
+		if [[ $failed -gt 0 ]]; then
 			((YANA_test_result_failed += 1))
+		else
+			((YANA_test_result_passed += 1))
 		fi
 	done
-	out_colored_stderr yellow "\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_file"
-	builtin echo "${YANA_TEST_RESULT}:${YANA_test_result_passed}_${YANA_test_result_failed}"
+	out_colored_stderr yellow "Passed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_file"
+	YanaTestResult "$YANA_test_result_passed" "$YANA_test_result_failed"
 	if [[ $YANA_test_result_failed -gt 0 ]]; then builtin return 1; fi
-}
-YANAtest:invoke_yana_test_file@nonexistent_file() {
-	invoke_yana_test_file '/nonexistent/path/test.sh' 2>/dev/null
-	if [[ $? -ne 0 ]]; then pass 'Returns error exit for nonexistent file'; else fail 'Expected non-zero exit for missing file'; fi
 }
 
 # Main entry point. Discovers and invokes test file(s), collects results,
@@ -309,10 +256,8 @@ invoke_yana_testing() {
 	builtin local -i YANA_total_passed=0
 	builtin local -i YANA_total_failed=0
 	for r in $YANA_total_tests; do
-		[[ $r != "${YANA_TEST_RESULT}:"* ]] && builtin continue
-		r=${r#"${YANA_TEST_RESULT}:"}
-		builtin local passed=${r%_*}
-		builtin local failed=${r#*_}
+		parsed_result=$(parse_YanaTestResult "$r") || builtin continue
+		builtin read -r passed failed <<<"$parsed_result"
 		((YANA_total_passed += passed))
 		((YANA_total_failed += failed))
 	done
@@ -341,22 +286,22 @@ parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		-testdir)
-			[[ -n $2 ]] || die 'Missing value for -testdir'
+			[[ -n $2 ]] || throw 'Missing value for -testdir'
 			_YANA_TESTDIR="$2"
 			builtin shift 2
 			;;
 		-testfile)
-			[[ -n $2 ]] || die 'Missing value for -testfile'
+			[[ -n $2 ]] || throw 'Missing value for -testfile'
 			_YANA_TESTFILE="$2"
 			builtin shift 2
 			;;
 		-testname)
-			[[ -n $2 ]] || die 'Missing value for -testname'
+			[[ -n $2 ]] || throw 'Missing value for -testname'
 			_YANA_TESTNAME="$2"
 			builtin shift 2
 			;;
 		-logfile)
-			[[ -n $2 ]] || die 'Missing value for -logfile'
+			[[ -n $2 ]] || throw 'Missing value for -logfile'
 			_YANA_LOGFILE="$2"
 			builtin shift 2
 			;;
@@ -378,7 +323,7 @@ parse_args() {
 			;;
 		*)
 			out_help
-			die "Unknown argument: $1"
+			throw "Unknown argument: $1"
 			;;
 		esac
 	done

@@ -9,14 +9,40 @@
             "type": "bashdb",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "${file}"
+            "program": "${file}",
+            "terminalKind": "integrated"
+        },
+        {
+            "name": "Bash-Debug (yana-test)",
+            "type": "bashdb",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/yana-test.sh",
+            "args": [
+                "-testfile",
+                "${relativeFile}"
+            ],
+            "terminalKind": "integrated"
         },
         {
             "name": "PowerShell Launch Current File",
             "type": "PowerShell",
             "request": "launch",
             "script": "${file}",
-            "cwd": "${cwd}"
+            "cwd": "${workspaceFolder}",
+            "createTemporaryIntegratedConsole": true
+        },
+        {
+            "name": "PowerShell (yana-test)",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/yana-test.ps1",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "-testfile",
+                "${relativeFile}"
+            ],
+            "createTemporaryIntegratedConsole": true
         }
     ]
 }
