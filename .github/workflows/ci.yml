@@ -32,8 +32,11 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF#v}"
-          sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" yana.sh
-          sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" yana.ps1
+          for file in yana-test.sh yana-test.ps1 yana.sh yana.ps1; do
+            [[ -f "$file" ]] || continue
+            echo "Setting version to '${VERSION}' in $file"
+            sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" "$file"
+          done
         env:
           GITHUB_REF: ${{ github.ref_name }}
       - name: Release
