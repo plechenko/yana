@@ -208,7 +208,7 @@ invoke_yana_test_function() {
 		fail 'Error: Test function execution failed' "$test_function"
 		builtin return 1
 	}
-	out_colored_stderr yellow "\t\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_function"
+	out_colored_stderr yellow "\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_function"
 	if [[ $YANA_test_result_failed -gt 0 ]]; then builtin return 1; fi
 }
 
@@ -276,7 +276,7 @@ invoke_yana_test_file() {
 			((YANA_test_result_failed += 1))
 		fi
 	done
-	out_colored_stderr yellow "\tPassed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_file"
+	out_colored_stderr yellow "Passed: $YANA_test_result_passed\tFailed: $YANA_test_result_failed" "$test_file"
 	builtin echo "${YANA_TEST_RESULT}:${YANA_test_result_passed}_${YANA_test_result_failed}"
 	if [[ $YANA_test_result_failed -gt 0 ]]; then builtin return 1; fi
 }

@@ -255,7 +255,7 @@ function Invoke-YanaTestFunction([string]$TestFunctionName) {
   } else {
     $Local:YANA_testResult.Failed++
   }
-  Out-ColoredStderr -Color yellow -Message "`t`tPassed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $TestFunctionName
+  Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $TestFunctionName
   $Local:YANA_subtests_ref = $null
   $Local:YANA_subtests.Remove($TestFunctionName)
 
@@ -340,8 +340,8 @@ function Invoke-YanaTestFile {
       $Local:YANA_testResult_fn = Invoke-YanaTestFunction -TestFunctionName $_
       $Local:YANA_testResult.Passed += $Local:YANA_testResult_fn.Passed
       $Local:YANA_testResult.Failed += $Local:YANA_testResult_fn.Failed
-      Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_testResult_fn.Passed)`tFailed: $($Local:YANA_testResult_fn.Failed)" -MessageDetail $_
     }
+    Out-ColoredStderr -Color yellow -Message "Passed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFile
   } else {
     Out-ColoredStderr -Color red -Message "Error: Test file '$TestFile' does not exist" -MessageDetail $TestFile
   }
