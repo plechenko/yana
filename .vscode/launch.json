@@ -14,10 +14,14 @@
         },
         {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+            "name": "Bash-Debug (yana-test)",
+>>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
             "type": "bashdb",
             "request": "launch",
-            "name": "Bash-Debug (yana-tests)",
             "cwd": "${workspaceFolder}",
+<<<<<<< HEAD
             "program": "${workspaceFolder}/yana_tests.sh",
 =======
             "name": "Bash-Debug (yana-test)",
@@ -26,6 +30,9 @@
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}/yana-test.sh",
 >>>>>>> e19ba57 (YANA Testing Framework refactoring (#26))
+=======
+            "program": "${workspaceFolder}/yana-test.sh",
+>>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
             "args": [
                 "-testfile",
                 "${relativeFile}"
@@ -38,13 +45,18 @@
             "request": "launch",
             "script": "${file}",
 <<<<<<< HEAD
+<<<<<<< HEAD
             "cwd": "${cwd}",
+=======
+            "cwd": "${workspaceFolder}",
+>>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
             "createTemporaryIntegratedConsole": true
         },
         {
-            "name": "PowerShell (yana-tests)",
+            "name": "PowerShell (yana-test)",
             "type": "PowerShell",
             "request": "launch",
+<<<<<<< HEAD
             "script": "${workspaceFolder}/yana_tests.ps1",
 =======
             "cwd": "${workspaceFolder}",
@@ -56,6 +68,9 @@
             "request": "launch",
             "script": "${workspaceFolder}/yana-test.ps1",
 >>>>>>> e19ba57 (YANA Testing Framework refactoring (#26))
+=======
+            "script": "${workspaceFolder}/yana-test.ps1",
+>>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
             "cwd": "${workspaceFolder}",
             "args": [
                 "-testfile",
