@@ -1,0 +1,9 @@
+title: YANA
+description: Yet Another Node Automator - lightweight Configuration Management and Automation for PowerShell and Bash
+remote_theme: just-the-docs/just-the-docs
+url: https://oops-42.github.io/yana
+
+nav_sort: order
+
+plugins:
+  - jekyll-remote-theme

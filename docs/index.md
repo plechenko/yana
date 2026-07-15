@@ -1,0 +1,36 @@
+---
+title: Home
+nav_order: 1
+---
+
+# YANA - Yet Another Node Automator
+
+**YANA** is an extremely small and simple, yet powerful, extensible Configuration Management and Automation tool written in pure PowerShell (for Windows systems) and Bash (for Unix-like systems).
+No magic, no hidden dependencies, no black boxes, no new programming language to learn.
+Just PowerShell/Bash, YAML and your favorite text editor.
+
+## Principles
+
+- **KISS** - *Keep It Simple and Stupid.* YANA is designed to be simple, small and easy to use.
+- **YAGNI** - *You Ain't Gonna Need It.* YANA is designed to be minimalistic and focused on the core functionality. No unnecessary features, no bloat, no complexity.
+- **DRY** - *Don't Repeat Yourself.* YANA is designed to be modular and reusable. Use existing actions, helpers, functions, blueprints and projects. Keep your blueprints and projects small, modular, focused and reusable.
+
+## Documentation
+
+- [Getting Started](getting-started.md) - Install YANA and run your first automation
+- [Concepts](concepts.md) - Engine, Toolkit, yanapacks and the overall architecture
+- [Blueprints and Modules](blueprints.md) - Authoring blueprint files and module structure
+- [Functions: Helpers, Actions, Verifiers](functions.md) - Writing and organizing YANA functions
+- [Routines and Events](routines-events.md) - Structuring execution and reacting to lifecycle events
+- [Testing Framework](testing.md) - Writing and running tests for your actions and helpers
+- [Contributing](contributing.md) - How to contribute to YANA
+
+## Source
+
+Source code and issue tracker: [github.com/oops-42/yana](https://github.com/oops-42/yana)
+
+YANA Modules Repository: [github.com/oops-42/yana-modules](https://github.com/oops-42/yana-modules)
+
+## License
+
+YANA is licensed under the [MIT License](https://github.com/oops-42/yana/blob/main/LICENSE).
