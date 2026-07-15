@@ -184,8 +184,15 @@ function Invoke-YanaTestFunction([string]$TestFunction) {
   } catch {
     fail "Exception $($_.Exception.Message) $($_.ScriptStackTrace.Split("`n")[0])"
   }
+  if ($Local:YANA_subtests_ref.Value.Failed -eq 0) {
+    $Local:YANA_testResult.Passed++
+  } else {
+    $Local:YANA_testResult.Failed++
+  }
+  Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_subtests_ref.Value.Passed)`tFailed: $($Local:YANA_subtests_ref.Value.Failed)" -MessageDetail $TestFunctionName
+  $Local:YANA_subtests_ref = $null
+  $Local:YANA_subtests.Remove($TestFunctionName)
 
-  Out-ColoredStderr -Color yellow -Message "`tPassed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFunction
   $Local:YANA_testResult
 }
 
@@ -224,12 +231,9 @@ function Invoke-YanaTestFile {
       return $Local:YANA_testResult
     }
     Get-YanaTestFunction -TestName $TestName | ForEach-Object {
-      $Local:YANA_testResult_fn = Invoke-YanaTestFunction -TestFunction $_
-      if ($Local:YANA_testResult_fn -isnot [YanaTestResult] -or $Local:YANA_testResult_fn.Failed -gt 0) {
-        $Local:YANA_testResult.Failed += 1
-      } else {
-        $Local:YANA_testResult.Passed += 1
-      }
+      $Local:YANA_testResult_fn = Invoke-YanaTestFunction -TestFunctionName $_
+      $Local:YANA_testResult.Passed += $Local:YANA_testResult_fn.Passed
+      $Local:YANA_testResult.Failed += $Local:YANA_testResult_fn.Failed
     }
     Out-ColoredStderr -Color yellow -Message "Passed: $($Local:YANA_testResult.Passed)`tFailed: $($Local:YANA_testResult.Failed)" -MessageDetail $TestFile
   } else {
