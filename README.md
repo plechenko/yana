@@ -1,8 +1,8 @@
 # YANA - Yet Another Node Automator
 
-**YANA** is an extremely small and simple, yet powerful, extensible Configuration Management and Automation tool written in pure PowerShell (for Windows systems) and Bash (for Unix-like systems).
-No magic, no hidden dependencies, no black boxes, no new programming language to learn.
-Just PowerShell/Bash, YAML and your favorite text editor.
+**YANA** is an extremely small and simple, yet powerful and extensible Configuration Management and Automation tool written in pure PowerShell (for Windows systems) and Bash (for Unix-like systems).
+
+No magic, no hidden dependencies, no black boxes, no new programming language to learn - only PowerShell/Bash, YAML and your favorite text editor.
 
 **YANA** is designed to be lightweight, simple, fast and easy to use.
 
@@ -10,13 +10,12 @@ Just PowerShell/Bash, YAML and your favorite text editor.
 
 We value the following principles when designing and implementing **YANA**:
 
-* **KISS** - *Keep It Simple and Stupid.* YANA is designed to be simple, small and easy to use.
-* **YAGNI** - *You Ain't Gonna Need It.* YANA is designed to be minimalistic and focused on the core functionality.
+* **KISS** - *Keep It Simple and Stupid.* YANA is simple, small and easy to use.
+* **YAGNI** - *You Ain't Gonna Need It.* YANA is minimalistic and focused on functionality that makes sense.
 No unnecessary features, no bloat, no complexity.
-It's easy to introduce the new features and functionality, but very difficult to deprecate and remove them.
-* **DRY** - *Don't Repeat Yourself.* YANA is designed to be modular and reusable.
-Don't reinvent the wheel - use existing actions, helpers, functions, blueprints and projects.
-Keep your blueprints and projects small, modular, focused and reusable.
+* **DRY** - *Don't Repeat Yourself.* YANA is modular and reusable.
+Keep your blueprints and modules small, modular, focused and reusable.
+Use existing blueprints and modules whenever possible.
 
 > The descriptions and statements below are not final and may be subject to change.
 

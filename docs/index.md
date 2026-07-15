@@ -5,15 +5,20 @@ nav_order: 1
 
 # YANA - Yet Another Node Automator
 
-**YANA** is an extremely small and simple, yet powerful, extensible Configuration Management and Automation tool written in pure PowerShell (for Windows systems) and Bash (for Unix-like systems).
-No magic, no hidden dependencies, no black boxes, no new programming language to learn.
-Just PowerShell/Bash, YAML and your favorite text editor.
+**YANA** is an extremely small and simple, yet powerful and extensible Configuration Management and Automation tool written in pure PowerShell (for Windows systems) and Bash (for Unix-like systems).
+
+No magic, no hidden dependencies, no black boxes, no new programming language to learn - only PowerShell/Bash, YAML and your favorite text editor.
+
+**YANA** is designed to be lightweight, simple, fast and easy to use.
 
 ## Principles
 
-- **KISS** - *Keep It Simple and Stupid.* YANA is designed to be simple, small and easy to use.
-- **YAGNI** - *You Ain't Gonna Need It.* YANA is designed to be minimalistic and focused on the core functionality. No unnecessary features, no bloat, no complexity.
-- **DRY** - *Don't Repeat Yourself.* YANA is designed to be modular and reusable. Use existing actions, helpers, functions, blueprints and projects. Keep your blueprints and projects small, modular, focused and reusable.
+- **KISS** - *Keep It Simple and Stupid.* YANA is simple, small and easy to use.
+- **YAGNI** - *You Ain't Gonna Need It.* YANA is minimalistic and focused on functionality that makes sense.
+No unnecessary features, no bloat, no complexity.
+- **DRY** - *Don't Repeat Yourself.* YANA is modular and reusable.
+Keep your blueprints and modules small, modular, focused and reusable.
+Use existing blueprints and modules whenever possible.
 
 ## Documentation
 
