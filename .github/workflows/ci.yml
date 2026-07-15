@@ -31,26 +31,12 @@ jobs:
       - name: Set Version in YANA scripts
         shell: bash
         run: |
-<<<<<<< HEAD
-<<<<<<< HEAD
           VERSION="${GITHUB_REF_NAME#v}"
           for file in yana-test.sh yana-test.ps1 yana.sh yana.ps1; do
             [[ -f "$file" ]] || continue
             echo "Setting version to '${VERSION}' in $file"
             sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" "$file"
           done
-=======
-=======
->>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
-          VERSION="${GITHUB_REF#v}"
-          sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" yana.sh
-          sed -i "s/YANAVERSIONPLACEHOLDER/${VERSION}/g" yana.ps1
-        env:
-          GITHUB_REF: ${{ github.ref_name }}
-<<<<<<< HEAD
->>>>>>> e19ba57 (YANA Testing Framework refactoring (#26))
-=======
->>>>>>> 39c976f (YANA Testing Framework refactoring (#26))
       - name: Release
         uses: softprops/action-gh-release@v3
         with:

@@ -24,15 +24,26 @@ fi
 [[ -z ${YANA_TITLE:-} ]] && builtin readonly YANA_TITLE='YANA Testing Framework (Bash)'
 [[ -z ${YANA_VERSION:-} ]] && builtin readonly YANA_VERSION='YANAVERSIONPLACEHOLDER'
 
-YANAtest:example() {
-	pass 'Example test passed'
+# Demonstrates passing a test case using the pass function.
+function YANAtest:example@pass {
+	pass
+	pass 'This test should pass'
+}
+
+# Demonstrates catching command failures inside a test function.
+function YANAtest:example@exception {
+	if ! (exit 1); then
+		pass 'Caught expected failure'
+	else
+		fail 'This should not be reached'
+	fi
 }
 
 # Prepares colored text for output to the console.
 # Takes care of logging to a file if $_YANA_LOGFILE is specified.
 # If $_YANA_QUIET is specified, suppresses output.
 # If $_YANA_NOCOLOR is specified, disables colored output.
-out_colored() {
+function out_colored {
 	builtin local Color="${1:-${Color:-}}"
 	builtin local Message="${2:-${Message:-}}"
 	builtin local MessageDetail="${3:-${MessageDetail:-}}"
@@ -69,27 +80,27 @@ out_colored() {
 	builtin echo "$Message"
 }
 # Outputs colored text to the standard output.
-out_colored_stdout() {
+function out_colored_stdout {
 	output="$(out_colored "$@")"
 	[[ -n $output ]] && builtin echo -e "$output" >&1
 }
 # Outputs colored text to the standard error.
-out_colored_stderr() {
+function out_colored_stderr {
 	output="$(out_colored "$@")"
 	[[ -n $output ]] && builtin echo -e "$output" >&2
 }
-throw() {
+function throw {
 	builtin local Message="${1:-${Message:-}}"
 	builtin local MessageDetail="${2:-${MessageDetail:-}}"
 	out_colored_stderr red "Error: $Message" "$MessageDetail"
 	builtin exit 1
 }
-YanaTestResult() {
+function YanaTestResult {
 	builtin local Passed="${1:-${Passed:-0}}"
 	builtin local Failed="${2:-${Failed:-0}}"
 	builtin echo "YanaTestResult:${Passed}_${Failed}"
 }
-parse_YanaTestResult() {
+function parse_YanaTestResult {
 	builtin local ResultString="${1:-}"
 	[[ $ResultString == 'YanaTestResult:'* ]] || builtin return 1
 	builtin local Result="${ResultString#'YanaTestResult:'}"
@@ -98,7 +109,7 @@ parse_YanaTestResult() {
 	builtin echo "$Passed" "$Failed"
 }
 
-get_yana_test_file() {
+function get_yana_test_file {
 	# builtin local test_dir="${1:-$_YANA_TESTDIR}"
 	builtin local test_dir="${1:-}"
 	[[ -z $test_dir ]] && test_dir="$PWD"
@@ -111,7 +122,7 @@ get_yana_test_file() {
 
 # Discovers test functions based on pattern specified in the $_YANA_TESTNAME parameter.
 # Outputs: List of test function names that match the specified pattern.
-get_yana_test_function() {
+function get_yana_test_function {
 	# builtin local test_name_pattern="${1:-$_YANA_TESTNAME}"
 	builtin local test_name_pattern="${1:-}"
 	[[ $test_name_pattern != YANAtest:* ]] && test_name_pattern="YANAtest:$test_name_pattern"
@@ -129,7 +140,7 @@ get_yana_test_function() {
 # Params:
 #  $1 <test_function> - A test function name to invoke.
 # Outputs: [YanaTestResult] with Passed and Failed tests.
-invoke_yana_test_function() {
+function invoke_yana_test_function {
 	builtin local test_function="${1:-}"
 	[[ -z $test_function ]] && {
 		out_colored_stderr red 'Error: Test function name shall not be empty'
@@ -149,7 +160,7 @@ invoke_yana_test_function() {
 
 	# Used by pass() and fail() to output the caller function name and line number.
 	#shellcheck disable=SC2317
-	_caller_info() {
+	function _caller_info {
 		builtin caller 1 | awk '{print $3 ":" $1}'
 	}
 
@@ -157,7 +168,7 @@ invoke_yana_test_function() {
 	# Prints a message indicating that the current test has passed.
 	# Increments the passed test count.
 	#shellcheck disable=SC2317
-	pass() {
+	function pass {
 		builtin local Message="${1:-"$test_function passed"}"
 		out_colored_stderr green "\t[+] ${Message}" "$(_caller_info)"
 		((YANA_test_result_passed += 1))
@@ -167,7 +178,7 @@ invoke_yana_test_function() {
 	# Prints a message indicating that the current test has failed.
 	# Increments the failed test count.
 	#shellcheck disable=SC2317
-	fail() {
+	function fail {
 		builtin local Message="${1:-"$test_function failed"}"
 		out_colored_stderr red "\t[-] ${Message}" "$(_caller_info)"
 		((YANA_test_result_failed += 1))
@@ -187,7 +198,7 @@ invoke_yana_test_function() {
 # Params:
 #   $1 <test_file>  Path to the test file to invoke.
 # Outputs: counters of Passed and Failed tests
-invoke_yana_test_file() {
+function invoke_yana_test_file {
 	builtin local test_file="${1:-}"
 	if [[ -z $test_file ]]; then
 		out_colored_stderr red 'Error: Test file name shall not be empty'
@@ -239,7 +250,7 @@ invoke_yana_test_file() {
 #   _YANA_TESTDIR  <dir>            Base directory. Defaults to $_YANA_TESTDIR.
 #   _YANA_TESTFILE <pattern>        File name pattern. Defaults to '*'.
 #   _YANA_TESTNAME <pattern>        Test function pattern. Defaults to '*'.
-invoke_yana_testing() {
+function invoke_yana_testing {
 	out_colored_stderr '' "$YANA_TITLE" "Version: $YANA_VERSION"
 	parse_args "$@"
 	[[ -z $_YANA_TESTDIR ]] && _YANA_TESTDIR="$PWD"
@@ -266,7 +277,7 @@ invoke_yana_testing() {
 	if [[ $YANA_total_failed -gt 0 ]]; then builtin exit 1; fi
 }
 
-out_help() {
+function out_help {
 	builtin echo "Usage: $0 [options]"
 	builtin echo "Options:"
 	builtin echo "  -testdir <dir>      Base directory to search for test files. Uses YANA_TESTDIR environment variable. Defaults to current directory."
@@ -282,7 +293,7 @@ out_help() {
 }
 
 # Parse command-line arguments and set global variables accordingly.
-parse_args() {
+function parse_args {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		-testdir)

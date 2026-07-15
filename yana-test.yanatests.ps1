@@ -4,23 +4,6 @@
 # The tested script shall be sourced.
 . "$PSScriptRoot/yana-test.ps1"
 
-function YANAtest:pass {
-  # Demonstrates passing a test case using the pass function.
-  pass
-  pass 'This test should pass'
-}
-
-function YANAtest:exception {
-  # Demonstrates catching command failures inside a test function
-
-  try {
-    throw 'This is a test exception'
-    fail 'This should not be reached'
-  } catch {
-    pass 'Caught exception:', $_.Exception.Message
-  }
-}
-
 function YANAtest:YanaTestResult@has_passed_and_failed_properties {
   $result = [YanaTestResult]::new()
   if ($result.Passed -eq 0) { pass 'Passed initialized to 0' } else { fail 'Passed not initialized correctly' }

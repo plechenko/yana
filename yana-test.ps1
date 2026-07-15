@@ -19,8 +19,20 @@
 Set-Variable -Name YANA_TITLE -Value 'YANA Testing Framework (PowerShell)' -Option Constant -Scope Global -ErrorAction:Ignore
 Set-Variable -Name YANA_VERSION -Value 'YANAVERSIONPLACEHOLDER' -Option Constant -Scope Global -ErrorAction:Ignore
 
-function YANAtest:example {
-  pass 'Example test passed'
+# Demonstrates passing a test case using the pass function.
+function YANAtest:example@pass {
+  pass
+  pass 'This test should pass'
+}
+
+# Demonstrates catching command failures inside a test function
+function YANAtest:example@exception {
+  try {
+    throw 'This is a test exception'
+    fail 'This should not be reached'
+  } catch {
+    pass 'Caught exception:', $_.Exception.Message
+  }
 }
 
 function Out-Colored {
