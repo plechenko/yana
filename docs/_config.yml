@@ -1,5 +1,5 @@
-title: YANA
-description: Yet Another Node Automator - lightweight Configuration Management and Automation for PowerShell and Bash
+title: YANA - Yet Another Node Automator
+description: A lightweight Configuration Management and Automation Tool for PowerShell and Bash
 remote_theme: just-the-docs/just-the-docs
 url: https://oops-42.github.io/yana
 
@@ -7,3 +7,8 @@ nav_sort: order
 
 plugins:
   - jekyll-remote-theme
+
+mermaid:
+  # Version of mermaid library
+  # Pick an available version from https://cdn.jsdelivr.net/npm/mermaid/
+  version: "11.16.0"
