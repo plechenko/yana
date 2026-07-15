@@ -39,8 +39,8 @@ function YANAtest:MyCommand@handles_empty_input { ... }
 Bash example:
 
 ```bash
-YANAtest:my_command() { ... }
-YANAtest:my_command@handles_empty_input() { ... }
+function YANAtest:my_command { ... }
+function YANAtest:my_command@handles_empty_input { ... }
 ```
 
 ## Writing Tests
@@ -63,7 +63,7 @@ function YANAtest:MyCommand@returns_expected_value {
 Bash example:
 
 ```bash
-YANAtest:my_command@returns_expected_value() {
+function YANAtest:my_command@returns_expected_value {
     result=$(my_command hello)
     if [[ "$result" == "expected" ]]; then
         pass 'Returns expected value'
@@ -118,7 +118,7 @@ function YANAtest:MyCommand@throws_on_bad_input {
 Bash example:
 
 ```bash
-YANAtest:my_command@throws_on_bad_input() {
+function YANAtest:my_command@throws_on_bad_input {
     if my_command "" 2>/dev/null; then
         fail 'Expected exception but none was thrown'
     else
