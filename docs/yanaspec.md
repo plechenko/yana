@@ -62,14 +62,16 @@ Variable values can be static or dynamic.
 * Dynamic variables call declared functions with arguments to compute their values at runtime.
 Dynamic variables are evaluated Just-In-Time (JIT) when they are referenced in args.
 Dynamic variables can be cached to avoid repeated computation and lookup queries.
+Dynamic variables can be marked as secret to avoid unexpected leakage by logging their values in the output.
 
 Dynamic variables are defined as objects with:
 
-| Field | Description |
-| --- | --- |
-| `fn` | Reference to the `yanavar`-function in format: `[module/]script:function` |
-| `args` | (Optional) Arguments for the function |
-| `cached` | (Optional) Whether to cache the result |
+| Field | Type | Description |
+| --- | --- | --- |
+| `fn` | string | Reference to the `yanavar`-function in format: `[module/]script:function` |
+| `args` | object | (Optional) Arguments for the function |
+| `cached` | boolean | (Optional) Whether to cache the result |
+| `secret` | boolean | (Optional) Whether the result is secret and should not be logged |
 
 Variables can be referenced using `${var:<var_name>}` syntax.
 
@@ -82,10 +84,16 @@ Variables can be referenced using `${var:<var_name>}` syntax.
         "args": {
             "param1": "value1"
         },
-        "cached": true
+        "cached": true,
+        "secret": true
     }
 }
 ```
+
+In the example above:
+* `static_var` is a static variable with a literal value.
+* `composed_var` is a composed variable that combines static values and other variables.
+* `dynamic_var` is a dynamic variable computed at runtime by calling the function `yanavar_value` located in script `compute.sh` or `compute.ps1` (depending on the platform) with argument `param1` set to `value1`.
 
 ### Steps
 

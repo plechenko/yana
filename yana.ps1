@@ -85,12 +85,72 @@ function _yana_check_prerequisites([string[]]$Prerequisites) {
     log debug "Prerequisite '$prerequisite' is installed."
   }
 }
+# Initializes encryption by generating a random secret key and setting the secret prefix, suffix and algorithm.
+function _yana_initialize_encryption() {
+  $Script:_YANA_SECRET_PREFIX = '<yanasecret:'
+  $Script:_YANA_SECRET_SUFFIX = '>'
+  $Script:_YANA_SECRET_PROVIDER = [System.Security.Cryptography.AesCryptoServiceProvider]::new()
+  $Script:_YANA_SECRET_PROVIDER.KeySize = 256
+  $Script:_YANA_SECRET_PROVIDER.Mode = [System.Security.Cryptography.CipherMode]::CBC
+  $Script:_YANA_SECRET_PROVIDER.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+  $Script:_YANA_SECRET_PROVIDER.GenerateKey()
+}
+# Cleans up encryption by clearing the secret key from memory.
+function _yana_cleanup_encryption() {
+  if ($null -ne $Script:_YANA_SECRET_PROVIDER) {
+    $Script:_YANA_SECRET_PROVIDER.Clear()
+    $Script:_YANA_SECRET_PROVIDER.Dispose()
+    $Script:_YANA_SECRET_PROVIDER = $null
+  }
+}
+# Encrypts a string using derived key and returns the encrypted string in the format: <yanasecret:{hmac}{iv}{ciphertext}>
+function yana_encrypt_string([Parameter(ValueFromPipeline = $true)][string]$InputString) {
+  if ($null -eq $Script:_YANA_SECRET_PROVIDER) { throw 'Secret Provider is not initialized. Call _yana_initialize_encryption first.' }
+  $Script:_YANA_SECRET_PROVIDER.GenerateIV()
+  $inputBytes = [System.Text.Encoding]::UTF8.GetBytes($InputString)
+  $encryptor = $Script:_YANA_SECRET_PROVIDER.CreateEncryptor()
+  $cipherBytes = $encryptor.TransformFinalBlock($inputBytes, 0, $inputBytes.Length)
+  $hmac = [System.Security.Cryptography.HMACSHA256]::new($Script:_YANA_SECRET_PROVIDER.Key)
+  try { $hmacBytes = $hmac.ComputeHash($Script:_YANA_SECRET_PROVIDER.IV + $cipherBytes) } finally { $hmac.Dispose() }
+  $cipherB64 = [Convert]::ToBase64String($hmacBytes + $Script:_YANA_SECRET_PROVIDER.IV + $cipherBytes)
+  [string]::Concat($Script:_YANA_SECRET_PREFIX, $cipherB64, $Script:_YANA_SECRET_SUFFIX)
+}
+
+# Finds and Decrypts encrypted values in a string using the initialized secret provider, expecting the encrypted strings with a prefix and suffix.
+function yana_decrypt_string([Parameter(ValueFromPipeline = $true)][string]$InputString) {
+  if ($null -eq $Script:_YANA_SECRET_PROVIDER) { throw 'Secret Provider is not initialized. Call _yana_initialize_encryption first.' }
+  $pattern = "$([regex]::Escape($Script:_YANA_SECRET_PREFIX))(?<ciphertext>[A-Za-z0-9+/=]+)$([regex]::Escape($Script:_YANA_SECRET_SUFFIX))"
+  foreach ($placeholder in ([Regex]::Matches($InputString, $pattern) | ForEach-Object { [pscustomobject]@{ value = $_.Value; ciphertext = $_.Groups['ciphertext'].Value } } | Select-Object -Unique)) {
+    if ($placeholder.ciphertext.Length -lt 88) {
+      log warn "Encrypted string is too short to be valid: $($placeholder.ciphertext)"
+      continue
+    }
+    try {
+      $cipherBytes = [Convert]::FromBase64String($placeholder.ciphertext)
+      $hmacBytes = $cipherBytes[0..31]
+      $ivBytes = $cipherBytes[32..47]
+      $actualCipherBytes = $cipherBytes[48..($cipherBytes.Length - 1)]
+      $hmac = [System.Security.Cryptography.HMACSHA256]::new($Script:_YANA_SECRET_PROVIDER.Key)
+      try { $hmacBytesComputed = $hmac.ComputeHash($ivBytes + $actualCipherBytes) } finally { $hmac.Dispose() }
+      if ([Convert]::ToBase64String($hmacBytesComputed) -ne [Convert]::ToBase64String($hmacBytes)) {
+        log warn "HMAC validation failed for encrypted string: $($placeholder.ciphertext)"
+        continue
+      }
+      $decryptor = $Script:_YANA_SECRET_PROVIDER.CreateDecryptor($Script:_YANA_SECRET_PROVIDER.Key, $ivBytes)
+      $decryptedBytes = $decryptor.TransformFinalBlock($actualCipherBytes, 0, $actualCipherBytes.Length)
+      $decryptedString = [System.Text.Encoding]::UTF8.GetString($decryptedBytes)
+      $InputString = $InputString.Replace($placeholder.value, $decryptedString)
+    } catch {
+      log warn "Decryption failed for encrypted string: $cipherText. Error: $($_.Exception.Message)"
+      continue
+    }
+    # Process each unique match here
+  }
+  $InputString
+}
 
 # Executes a function with the specified prefix and name.
-function _yana_execute_fn([string]$RootDir = $Script:YANA_SOURCE, [string]$Prefix, [string]$Name, [hashtable]$Arguments) {
-  # .SYNOPSIS
-  # 	Executes a function with the specified prefix and name.
-
+function _yana_execute_fn([string]$RootDir = $Script:YANA_SOURCE, [string]$Prefix, [string]$Name, [bool]$Sensitive = $false, [hashtable]$Arguments) {
   # Parse function name. Format: `[module/]script:function`
   # Module and script supports alphanumeric characters, underscores, hyphens, and dots.
   # Function supports only alphanumeric characters and underscores.
@@ -101,9 +161,7 @@ function _yana_execute_fn([string]$RootDir = $Script:YANA_SOURCE, [string]$Prefi
   } else {
     throw "Invalid function name: '$Name'. Expected format: '[module/]script:function'."
   }
-
   $fnArgs = _yana_resolve_args $Arguments
-
   $local:fullFnName = "${Prefix}_${local:fnFunction}"
   log debug "Executing function '$local:fullFnName' from module '$local:fnModule', script '$local:fnScript' with arguments: $($fnArgs | ConvertTo-Json -Compress)"
   $sb = {
@@ -114,8 +172,22 @@ function _yana_execute_fn([string]$RootDir = $Script:YANA_SOURCE, [string]$Prefi
     ) -Force -ErrorAction Ignore | ForEach-Object {
       log trace "Loading script: $($_.FullName)"
       . $_.FullName }
+    $yana_cmd = Get-Command $YANA_COMMAND -ErrorAction SilentlyContinue
+    if ($null -eq $yana_cmd) { throw "Function '$YANA_COMMAND' not found in the loaded scripts." }
     log trace "Invoking function '$YANA_COMMAND' with arguments: $($YANA_ARGS | ConvertTo-Json -Compress)"
-    & $YANA_COMMAND @YANA_ARGS
+    $YANA_ARGS = @{}
+    foreach ($arg in $fnArgs.GetEnumerator()) {
+      $YANA_ARGS[$arg.Name] = if ($arg.Value -is [string]) { yana_decrypt_string $arg.Value } else { $arg.Value }
+      if ($yana_cmd.Parameters.ContainsKey($arg.Name) -and $yana_cmd.Parameters[$arg.Name].ParameterType -eq [securestring]) {
+        $YANA_ARGS[$arg.Name] = ConvertTo-SecureString -String $YANA_ARGS[$arg.Name] -AsPlainText -Force
+      }
+    }
+    if ($Sensitive) {
+      log debug "Function '$local:fullFnName' is marked as sensitive. Its output will be encrypted."
+      & $YANA_COMMAND @YANA_ARGS | yana_encrypt_string
+    } else {
+      & $YANA_COMMAND @YANA_ARGS
+    }
   }
   $output = $sb.InvokeWithContext(
     @{
@@ -123,7 +195,7 @@ function _yana_execute_fn([string]$RootDir = $Script:YANA_SOURCE, [string]$Prefi
     },
     @(
       [psvariable]::new('YANA_COMMAND', $local:fullFnName, 'ReadOnly'),
-      [psvariable]::new('YANA_ARGS', $fnArgs, 'ReadOnly'),
+      [psvariable]::new('fnArgs', $fnArgs, 'ReadOnly'),
       [psvariable]::new('YANA_SOURCE', $RootDir, 'ReadOnly')
     ), $null
   )
@@ -178,11 +250,12 @@ function _yana_expand_var([string]$VarName, [hashtable]$Vars) {
   if (-not $Vars.ContainsKey($VarName)) { throw "Variable '$VarName' is not defined." }
   $output = $Vars[$VarName]
   if ($output -is [hashtable]) {
-    $cached = $output['cached']
-    log trace "Resolving variable '$VarName'"
+    $cached = $output['cached'] -eq $true
+    $secret = $output['secret'] -eq $true
+    log trace "Resolving variable '$VarName', cached: $cached, secret: $secret, function: $($output['fn']), args: $($output['args'])"
     # $fnArgs=_yana_resolve_args $output['args']
-    $output = _yana_execute_fn -RootDir $Script:YANA_SOURCE -Prefix 'yanavar' -Name $output['fn'] -Arguments $output['args']
-    if ($cached -eq $true) {
+    $output = _yana_execute_fn -RootDir $Script:YANA_SOURCE -Prefix 'yanavar' -Name $output['fn'] -Arguments $output['args'] -Sensitive $secret
+    if ($cached) {
       log trace "Caching resolved value for variable '$VarName' as '$output'"
       $Vars[$VarName] = $output
     }
@@ -190,8 +263,7 @@ function _yana_expand_var([string]$VarName, [hashtable]$Vars) {
   $output
 }
 function _yana_expand_param([string]$ParamName, [hashtable]$Params) {
-  if (-not $Params.ContainsKey($ParamName)) { throw "Parameter '$ParamName' is not defined." }
-  $Params[$ParamName]
+  if ($Params.ContainsKey($ParamName)) { $Params[$ParamName] } else { throw "Parameter '$ParamName' is not defined." }
 }
 # Resolves variable placeholders in the input string.
 function _yana_expand_string([Parameter(ValueFromPipeline = $true)][string]$InputString, [hashtable]$Params, [hashtable]$Vars) {
@@ -287,49 +359,34 @@ function _yana_apply_step([hashtable]$Step, [string]$RootDir = $Script:YANA_SOUR
   throw "Step '$stepName' is not compliant after apply"
 }
 
-function _yana_mode_fetch {
-  # .SYNOPSIS
-  # 	Fetches the specified YANA Module.
-  param(
-    # The source of the YANA Module to fetch (e.g., a file path or URL).
-    [string]$Source
-  )
+# 	Fetches the specified YANA Module.
+function _yana_mode_fetch([string]$Source) {
   if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''fetch'' mode.' }
   log info "Fetching YANA Module from source: $Source"
   # Placeholder for actual implementation of fetching the YANA module
 }
 #	Applies the specified YANA Module.
-function _yana_mode_apply {
-  param(
-    # The source of the YANA Module to apply (e.g., a file path or URL).
-    [string]$Source
-  )
+function _yana_mode_apply([string]$Source) {
   if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''apply'' mode.' }
   _yana_mode_fetch -Source $Source
   log info "Applying YANA Module from source: $Source"
 
   $Script:YANA_SOURCE = _yana_load_spec_file -Source $Source
   _yana_check_prerequisites -Prerequisites $Script:YANA_REQUIRES
+  _yana_initialize_encryption
   foreach ($step in $Script:YANA_STEPS) {
     _yana_apply_step -Step $step
   }
   log success "YANA Module applied successfully: $Script:YANA_SOURCE"
-
-
 }
-function _yana_mode_verify {
-  # .SYNOPSIS
-  # 	Verifies the state of the system against the specified YANA Module.
-  param(
-    # The source of the YANA Module to verify (e.g., a file path or URL).
-    [string]$Source
-  )
+function _yana_mode_verify([string]$Source) {
   if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''verify'' mode' }
   _yana_mode_fetch -Source $Source
   log info "Verifying YANA Module from source: $Source"
 
   $Script:YANA_SOURCE = _yana_load_spec_file -Source $Source
   _yana_check_prerequisites -Prerequisites $Script:YANA_REQUIRES
+  _yana_initialize_encryption
   foreach ($step in $Script:YANA_STEPS) {
     $verifyResult = _yana_verify_step -Step $step
     if ($null -eq $verifyResult) { continue }
@@ -339,9 +396,8 @@ function _yana_mode_verify {
   log success "YANA Module verified successfully: $Script:YANA_SOURCE"
 }
 
+# The main entry point for YANA.
 function _yana_ {
-  # .SYNOPSIS
-  # 	The main entry point for YANA.
   param(
     # If specified, outputs help information and exits.
     [switch]$Help,
@@ -383,6 +439,7 @@ if ($MyInvocation.InvocationName -ne '.') {
   } catch {
     log fatal $_.Exception.Message
     $_.ScriptStackTrace | ForEach-Object { log stack $_ }
+    _yana_cleanup_encryption
     exit 1
   }
 }

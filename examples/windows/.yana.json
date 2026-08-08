@@ -13,7 +13,9 @@
       "fn": "file:read",
       "args": {
         "path": "${param:marker_file}"
-      }
+      },
+      "cached": true,
+      "secret": true
     },
     "user": {
       "fn": "sys:user",

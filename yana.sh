@@ -19,7 +19,7 @@ set -eEuo pipefail
 [[ -z ${YANA_VERSION:-} ]] && builtin readonly YANA_VERSION='YANAVERSIONPLACEHOLDER'
 
 FUNCNEST=100
-builtin readonly ERR_GENERAL=1 ERR_MISUSE=64 ERR_DATA_FORMAT=65 ERR_NO_INPUT=66
+[[ -z ${ERR_GENERAL:-} ]] && builtin readonly ERR_GENERAL=1 ERR_MISUSE=64 ERR_DATA_FORMAT=65 ERR_NO_INPUT=66
 
 _yana_usage() {
 	case "${YANA_MODE:-}" in
@@ -72,14 +72,14 @@ log() {
 	builtin local _logMessage _color_code='' _reset_code=''
 	if [[ -t 2 ]]; then
 		case "$_level" in
-		TRACE | DEBUG) _color_code='\033[0;90m' ;;          # Gray
-		INFO) _color_code='\033[0;36m' ;;                   # Cyan
-		OK | SUCCESS | PASS) _color_code='\033[0;32m' ;;    # Green
-		SKIP) _color_code='\033[0;33m' ;;                   # Yellow
-		WARN | WARNING) _color_code='\033[0;93m' ;;         # Bright Yellow
-		FAIL | FAILURE | ERROR) _color_code='\033[0;91m' ;; # Bright Red
-		FATAL) _color_code='\033[0;31m' ;;                  # Red
-		*) _color_code='\033[0m' ;;                         # Default
+		TRACE | DEBUG) _color_code='\033[0;90m' ;;       # Gray
+		INFO) _color_code='\033[0;36m' ;;                # Cyan
+		OK | SUCCESS | PASS) _color_code='\033[0;32m' ;; # Green
+		SKIP) _color_code='\033[0;33m' ;;                # Yellow
+		WARN) _color_code='\033[0;93m' ;;                # Bright Yellow
+		FAIL | ERROR) _color_code='\033[0;91m' ;;        # Bright Red
+		FATAL) _color_code='\033[0;31m' ;;               # Red
+		*) _color_code='\033[0m' ;;                      # Default
 		esac
 		_reset_code='\033[0m'
 	fi
@@ -106,11 +106,93 @@ throw() {
 	done
 	builtin exit "$_rc"
 }
-
+# Tests if the required commands are available in the system PATH.
 _yana_check_prerequisites() {
 	builtin local cmd
 	for cmd in "$@"; do builtin command -v "$cmd" &>/dev/null || throw "Prerequisite '$cmd' is not installed or not in the system PATH." $ERR_MISUSE; done
 }
+# Secret management variables and functions.
+# Initializes the secret management by generating a random key and storing it in a secure file descriptor.
+_yana_initialize_encryption() {
+	_YANA_SECRET_KEY='' _YANA_SECRET_ALGORITHM='aes-256-cbc' _YANA_SECRET_PREFIX='<yanasecret:' _YANA_SECRET_SUFFIX='>'
+	builtin local tmp
+	{
+		[[ -d /dev/shm ]] && tmp='/dev/shm' || tmp="${TMPDIR:-/tmp}"
+		tmp=$(mktemp -p "$tmp")
+		chmod 600 "$tmp"
+		openssl rand -hex 32 >"$tmp"
+		builtin exec {_YANA_SECRET_KEY}<"$tmp"
+		rm -f "$tmp"
+	} || throw "Failed to initialize encryption" $ERR_GENERAL
+}
+# Cleans up the secret management by closing the secure file descriptor and unsetting the key variable.
+_yana_cleanup_encryption() {
+	{
+		[[ -n ${_YANA_SECRET_KEY:-} ]] && builtin exec {_YANA_SECRET_KEY}<&-
+		builtin unset _YANA_SECRET_KEY
+	}
+}
+# Encrypts a string using the initialized secret key and algorithm, returning the encrypted string with a prefix and suffix.
+yana_encrypt_string() {
+	builtin local _input="${1:-$(cat -)}"
+	[[ -z ${_YANA_SECRET_KEY:-} ]] && throw "Secret key is not initialized. Call _yana_initialize_encryption first." $ERR_MISUSE
+	builtin local _iv _cipher _hmac
+	_iv=$(openssl rand -hex 16)
+	_cipher=$(
+		builtin set +x
+		openssl enc -"$_YANA_SECRET_ALGORITHM" -a -A -K "$(cat /proc/self/fd/"${_YANA_SECRET_KEY}")" -iv "$_iv" -nosalt -pbkdf2 <<<"$_input"
+	) || throw "Failed to encrypt string." $ERR_GENERAL
+	[[ -n $_cipher ]] || throw "Encrypted string is empty." $ERR_GENERAL
+	_hmac=$(
+		builtin set +x
+		openssl dgst -sha256 -mac HMAC -macopt "hexkey:$(cat /proc/self/fd/"${_YANA_SECRET_KEY}")" <<<"$_iv$_cipher" | awk '{print $2}'
+	) || throw "Failed to compute HMAC for encrypted string." $ERR_GENERAL
+	[[ -n $_hmac ]] || throw "HMAC is empty." $ERR_GENERAL
+	echo -n "${_YANA_SECRET_PREFIX}${_hmac,,}${_iv}${_cipher}${_YANA_SECRET_SUFFIX}"
+}
+
+# Finds and Decrypts encrypted values in a string using the initialized secret key and algorithm, expecting the encrypted strings with a prefix and suffix.
+yana_decrypt_string() {
+	builtin local _input="${1:-$(cat -)}"
+	[[ -z ${_YANA_SECRET_KEY:-} ]] && throw "Secret key is not initialized. Call _yana_initialize_encryption first." $ERR_MISUSE
+	builtin local _pattern="$_YANA_SECRET_PREFIX([0-9a-f]{64})([0-9a-f]{32})([A-Za-z0-9+/=]+)$_YANA_SECRET_SUFFIX"
+	# Find all unique occurrences of the encrypted string pattern in the input
+	builtin local -a _secret_matches
+	builtin readarray -t _secret_matches < <(grep -oP "$_pattern" <<<"$_input" | sort -u)
+	builtin local _secret_match
+	for _secret_match in "${_secret_matches[@]}"; do
+		builtin local _hmac _iv _cipher _decrypted
+		if [[ $_secret_match =~ $_pattern ]]; then
+			_hmac="${BASH_REMATCH[1]}"
+			_iv="${BASH_REMATCH[2]}"
+			_cipher="${BASH_REMATCH[3]}"
+			_computed_hmac=$(
+				builtin set +x
+				openssl dgst -sha256 -mac HMAC -macopt "hexkey:$(cat /proc/self/fd/"${_YANA_SECRET_KEY}")" <<<"$_iv$_cipher" | awk '{print $2}'
+			) || {
+				log skip "Failed to compute HMAC for encrypted string"
+				continue
+			}
+			[[ $_hmac != "${_computed_hmac,,}" ]] && {
+				log skip "HMAC mismatch for encrypted string"
+				continue
+			}
+			_decrypted=$(
+				builtin set +x
+				openssl enc -d -"$_YANA_SECRET_ALGORITHM" -a -A -K "$(cat /proc/self/fd/"${_YANA_SECRET_KEY}")" -iv "$_iv" -nosalt -pbkdf2 <<<"$_cipher"
+			) || {
+				log skip "Failed to decrypt string"
+				continue
+			}
+			_input="${_input//$_secret_match/$_decrypted}"
+		fi
+	done
+	echo -n "$_input"
+
+}
+# Executes a function with the given prefix and name, passing the provided arguments, and captures the output in the specified reference variable.
+# The function name should be in the format '[module/]script:function'.
+# If the 3rd argument is 'true', the function is marked as sensitive, its output will be encrypted before being returned.
 _yana_execute_fn() {
 	builtin local _yana_fn_prefix="$1" _yana_fn="$2"
 	builtin local -n _yana_output_ref="$3"
@@ -145,8 +227,20 @@ _yana_execute_fn() {
 		done
 		log trace "Executing function '${_yana_fn_prefix}_${_yana_fn_func}' from script '$_yana_fn_script' in module '$_yana_fn_module' with arguments: ${_yana_args_ref[*]}"
 		#shellcheck disable=SC2034
-		local -n YANA_ARGS=_yana_args_ref
-		"${_yana_fn_prefix}_${_yana_fn_func}"
+		(
+			set +x
+			set -o pipefail
+			builtin local YANA_COMMAND="${_yana_fn_prefix}_${_yana_fn_func}"
+			builtin local -A YANA_ARGS
+			for key in "${!_yana_args_ref[@]}"; do
+				YANA_ARGS["$key"]=$(yana_decrypt_string "${_yana_args_ref[$key]}")
+			done
+			if [[ ${sensitive:-false} == true ]]; then
+				"$YANA_COMMAND" | yana_encrypt_string
+			else
+				"$YANA_COMMAND"
+			fi
+		)
 	) || _rc=$?
 	builtin return $_rc
 }
@@ -178,13 +272,12 @@ _yana_expand_var() {
 	# If the value is a JSON object, parse it and extract the function and arguments
 	_yana_var_fn=$(jq -r '.fn // empty' <<<"$_yana_var_val") || throw "Failed to parse JSON for variable '$_yana_var_name'. Ensure it is valid JSON." $ERR_DATA_FORMAT
 	[[ -z $_yana_var_fn ]] && throw "Variable '$_yana_var_name' is defined as an object but has an empty 'fn' value. Ensure it is properly defined in the YANA spec." $ERR_DATA_FORMAT
+	_yana_var_cached=$(jq -r '.cached == true' <<<"$_yana_var_val") || throw "Failed to parse JSON for variable '$_yana_var_name'. Ensure it is valid JSON." $ERR_DATA_FORMAT
+	_yana_var_secret=$(jq -r '.secret == true' <<<"$_yana_var_val") || throw "Failed to parse JSON for variable '$_yana_var_name'. Ensure it is valid JSON." $ERR_DATA_FORMAT
 	_yana_var_args_raw=$(jq -r '(.args | objects) // {} | to_entries | map("\(.key):\(.value|@text|@base64)") | .[]' <<<"$_yana_var_val") || throw "Failed to parse JSON for variable '$_yana_var_name'. Ensure it is valid JSON." $ERR_DATA_FORMAT
-	_yana_resolve_args "$_yana_var_args_raw" _yana_var_args || throw "Failed to resolve variable placeholders in argument '$k' with value '$v'." $ERR_DATA_FORMAT
-	_yana_var_cached=$(jq -r '.cached // false' <<<"$_yana_var_val") || throw "Failed to parse JSON for variable '$_yana_var_name'. Ensure it is valid JSON." $ERR_DATA_FORMAT
-	builtin local _rc=0 _yana_var_result
-	_yana_execute_fn 'yanavar' "$_yana_var_fn" _output_ref _yana_var_args || _rc=$?
-	[[ $_rc -ne 0 ]] && throw "Function 'yanavar_$_yana_var_fn' failed with return code: $_rc" $_rc
-	log trace "Function 'yanavar_$_yana_var_fn' executed with return code: $_rc and output: $_output_ref"
+	_yana_resolve_args "$_yana_var_args_raw" _yana_var_args || throw "Failed to resolve arguments for variable '$_yana_var_name'." $ERR_DATA_FORMAT
+	sensitive="${_yana_var_secret}" _yana_execute_fn 'yanavar' "${_yana_var_fn}" _output_ref _yana_var_args || throw "Function 'yanavar_$_yana_var_fn' failed" $?
+	log trace "Function 'yanavar_$_yana_var_fn' executed and output: $_output_ref"
 	if [[ $_yana_var_cached == true ]]; then
 		_yana_vars_ref["$_yana_var_name"]=$(jq -R '.' <<<"$_output_ref") || throw "Failed to cache resolved value for variable '$_yana_var_name' as JSON string." $ERR_DATA_FORMAT
 		log trace "Cached resolved value for variable '$_yana_var_name' as JSON string: ${_yana_vars_ref["$_yana_var_name"]}"
@@ -206,7 +299,7 @@ _yana_expand_string() {
 		var) if [[ -v YANA_VARS["$_key"] ]]; then _yana_expand_var "$_key" _value; else throw "Variable '$_key' is not defined." $ERR_MISUSE; fi ;;
 		*) throw "Unknown variable type '$_ctx' in variable reference '$_var'. This should never happen. Please report this as a bug." $ERR_GENERAL ;;
 		esac
-		[[ -z $_value ]] && log warning "Variable '$_var' resolved to an empty value. Ensure that the variable is defined and has a non-empty value."
+		[[ -z $_value ]] && log warn "Variable '$_var' resolved to an empty value. Ensure that the variable is defined and has a non-empty value."
 		log trace "Resolved variable '$_var' to value: $_value"
 		_input="${_input//$_var/$_value}"
 		log trace "Intermediate resolved input: $_input"
@@ -412,13 +505,13 @@ _yana_mode_verify() {
 	[[ -z $YANA_SOURCE ]] && throw 'No source specified'
 	_yana_mode_fetch
 	log info "Verifying YANA Module: $YANA_SOURCE"
-	# Implement the verify logic here
 	builtin local -A YANA_SPEC YANA_PARAMS YANA_VARS
 	builtin local -a YANA_STEPS YANA_REQUIRES
 	_yana_load_spec_file
 	#shellcheck disable=SC2086
 	_yana_check_prerequisites "${YANA_REQUIRES[@]}"
 
+	_yana_initialize_encryption
 	builtin local _yana_step
 	# Execute steps
 	for _yana_step in "${YANA_STEPS[@]}"; do
@@ -438,6 +531,7 @@ _yana_mode_apply() {
 	#shellcheck disable=SC2086
 	_yana_check_prerequisites "${YANA_REQUIRES[@]}"
 
+	_yana_initialize_encryption
 	builtin local _yana_step
 	# Execute steps
 	for _yana_step in "${YANA_STEPS[@]}"; do
@@ -450,6 +544,12 @@ _yana_mode_apply() {
 }
 # Main entry point.
 _yana_() {
+	if [[ ${BASH_SOURCE[1]:-} != *bashdb ]]; then
+		trap '_yana_cleanup_encryption' EXIT ERR
+		trap '_yana_cleanup_encryption; exit 130' INT
+		trap '_yana_cleanup_encryption; exit 143' TERM
+	fi
+
 	builtin local YANA_MODE="${YANA_MODE:-}" YANA_SOURCE="${YANA_SOURCE:-}" YANA_LOGFILE="${YANA_LOGFILE:-}" YANA_TRACE="${YANA_TRACE:-false}" YANA_DEBUG="${YANA_DEBUG:-false}" _yana_show_help=false
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -465,11 +565,6 @@ _yana_() {
 			YANA_LOGFILE="$1"
 			;;
 		-help | --help) _yana_show_help=true ;;
-		# --debug) YANA_DEBUG=true ;;
-		# --trace)
-		# 	YANA_TRACE=true
-		# 	# set -x
-		# 	;;
 		*)
 			[[ $1 == -* ]] && throw "Unknown option: $1. Use -help to see available options."
 			throw "Unknown mode: $1. Use -help to see available modes."
@@ -483,7 +578,7 @@ _yana_() {
 		_yana_usage
 		builtin return 0
 	fi
-	_yana_check_prerequisites jq base64 awk
+	_yana_check_prerequisites jq base64 awk openssl
 	[[ -z $YANA_MODE ]] && throw 'No mode specified. Use -help to see available modes.'
 	_yana_mode_"$YANA_MODE"
 }

@@ -2,7 +2,7 @@ FROM  mcr.microsoft.com/windows/servercore:ltsc2025
 
 WORKDIR /yana
 COPY *.ps1 ./
-COPY *.json ./
+# COPY *.json ./
 # COPY examples ./examples/
 COPY examples/windows ./example/
 
