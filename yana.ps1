@@ -15,21 +15,21 @@ function _yana_usage([string]$Mode) {
       Write-Host 'Usage: yana.ps1 apply -source <path|url>'
       Write-Host '  Applies the specified YANA Module.'
       Write-Host 'Options:'
-      Write-Host '  -source <path|url>         Specifies the source of YANA Module to apply. Can be a local path or a URL. Uses YANA_SOURCE environment variable.'
+      Write-Host '  -source <path|url>         Specifies the source of YANA Module to apply. Can be local path or URL.'
       break
     }
     'verify' {
       Write-Host 'Usage: yana.ps1 verify -source <path|url>'
       Write-Host '  Compares the state of the system with the state specified by the YANA Module without making any changes.'
       Write-Host 'Options:'
-      Write-Host '  -source <path|url>         Specifies the source of YANA Module to verify. Can be a local path or a URL. Uses YANA_SOURCE environment variable.'
+      Write-Host '  -source <path|url>         Specifies the source of YANA Module to verify. Can be local path or URL.'
       break
     }
     'pull' {
       Write-Host 'Usage: yana.ps1 pull -source <path|url>'
       Write-Host '  Pulls the specified YANA Module from the given source (path or URL).'
       Write-Host 'Options:'
-      Write-Host '  -source <path|url>         Specifies the source of YANA Module to pull. Can be path or URL. Uses YANA_SOURCE environment variable.'
+      Write-Host '  -source <path|url>         Specifies the source of YANA Module to pull. Can be local path or URL.'
     }
     'version' {
       Write-Host 'Usage: yana.ps1 version'
@@ -47,7 +47,15 @@ function _yana_usage([string]$Mode) {
   Write-Host 'General Options:'
   Write-Host '  -help                      Displays this help message.'
   Write-Host '  -help <mode>               Displays help for the specified mode.'
-  Write-Host '  -logfile <file>            Log file path. Uses YANA_LOGFILE environment variable. If not specified, logs are not written to a file.'
+  Write-Host '  -logfile <file>            Log file path. If not specified, logs are not written to a file.'
+  Write-Host 'Environment Variables:'
+  Write-Host '  YANA_MODE=<mode>           Specifies the mode to run YANA in.'
+  Write-Host '  YANA_SOURCE=<path|url>     Specifies the source of the YANA Module.'
+  Write-Host '  YANA_LOGFILE=<file>        Specifies the log file path.'
+  Write-Host '  YANA_PARAM_<name>=<value>  Overrides a parameter declared in the module''s ''params'' section.'
+  Write-Host '                             Example: $Env:YANA_PARAM_version=2.0; ./yana.ps1 apply -source ./module'
+  Write-Host '  YANA_DEBUG=true            Enables debug logging.'
+  Write-Host '  YANA_TRACE=true            Enables trace logging (implies debug logging).'
 }
 # Logs a message with the specified level and message.
 # If the level is 'trace' or 'debug', the message is logged only if the corresponding switch is enabled.
@@ -233,18 +241,22 @@ function _yana_load_spec_file([string]$Source) {
     author      = $spec['author']
     license     = $spec['license']
   }
+  if ($null -eq $spec['requires']) { $spec['requires'] = @() }
+  if ($spec['requires'] -isnot [array]) { throw "Spec field 'requires' must be an array." }
   $Script:YANA_REQUIRES = $spec['requires']
-  if ($null -eq $Script:YANA_REQUIRES) { $Script:YANA_REQUIRES = @() }
-  if ($Script:YANA_REQUIRES -isnot [array]) { throw "Spec field 'requires' must be an array." }
+  if ($null -eq $spec['steps']) { $spec['steps'] = @() }
+  if ($spec['steps'] -isnot [array]) { throw "Spec field 'steps' must be an array." }
   $Script:YANA_STEPS = $spec['steps']
-  if ($null -eq $Script:YANA_STEPS) { $Script:YANA_STEPS = @() }
-  if ($Script:YANA_STEPS -isnot [array]) { throw "Spec field 'steps' must be an array." }
+  if ($null -eq $spec['params'] ) { $spec['params'] = @{} }
+  if ($spec['params'] -isnot [hashtable]) { throw "Spec field 'params' must be an object." }
   $Script:YANA_PARAMS = $spec['params']
-  if ($null -eq $Script:YANA_PARAMS) { $Script:YANA_PARAMS = @{} }
-  if ($Script:YANA_PARAMS -isnot [hashtable]) { throw "Spec field 'params' must be an object." }
+  foreach ($paramKey in $spec['params'].Keys) {
+    $ev = [System.Environment]::GetEnvironmentVariable("YANA_PARAM_$paramKey")
+    if ($null -ne $ev) { $Script:YANA_PARAMS[$paramKey] = $ev }
+  }
+  if ($null -eq $spec['vars']) { $spec['vars'] = @{} }
+  if ($spec['vars'] -isnot [hashtable]) { throw "Spec field 'vars' must be an object." }
   $Script:YANA_VARS = $spec['vars']
-  if ($null -eq $Script:YANA_VARS) { $Script:YANA_VARS = @{} }
-  if ($Script:YANA_VARS -isnot [hashtable]) { throw "Spec field 'vars' must be an object." }
   return [System.IO.Path]::GetDirectoryName($_yana_spec_file)
 }
 function _yana_expand_var([string]$VarName, [hashtable]$Vars) {
@@ -253,7 +265,7 @@ function _yana_expand_var([string]$VarName, [hashtable]$Vars) {
   if ($output -is [hashtable]) {
     $cached = $output['cached'] -eq $true
     $secret = $output['secret'] -eq $true
-    log trace "Resolving variable '$VarName', cached: $cached, secret: $secret, function: $($output['fn']), args: $($output['args'])"
+    log debug "Resolving variable '$VarName', cached: $cached, secret: $secret, function: $($output['fn']), args: $($output['args'])"
     # $fnArgs=_yana_resolve_args $output['args']
     $output = _yana_execute_fn -RootDir $Script:YANA_SOURCE -Prefix 'yanavar' -Name $output['fn'] -Arguments $output['args'] -Sensitive $secret
     if ($cached) {

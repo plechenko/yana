@@ -24,40 +24,48 @@ FUNCNEST=100
 _yana_usage() {
 	case "${YANA_MODE:-}" in
 	apply)
-		builtin echo "Usage: yana.sh apply -source <path|url>"
-		builtin echo "  Applies the specified YANA Module."
-		builtin echo "Options:"
-		builtin echo "  -source <path|url>         Specifies the source of YANA Module to apply. Can be a local path or a URL. Uses YANA_SOURCE environment variable."
+		builtin echo 'Usage: yana.sh apply -source <path|url>'
+		builtin echo '  Applies the specified YANA Module.'
+		builtin echo 'Options:'
+		builtin echo '  -source <path|url>         Specifies the source of YANA Module to apply. Can be local path or URL.'
 		;;
 	verify)
-		builtin echo "Usage: yana.sh verify -source <path|url>"
-		builtin echo "  Compares the state of the system with the state specified by the YANA Module without making any changes."
-		builtin echo "Options:"
-		builtin echo "  -source <path|url>         Specifies the source of YANA Module to verify. Can be a local path or a URL. Uses YANA_SOURCE environment variable."
+		builtin echo 'Usage: yana.sh verify -source <path|url>'
+		builtin echo '  Compares the state of the system with the state specified by the YANA Module without making any changes.'
+		builtin echo 'Options:'
+		builtin echo '  -source <path|url>         Specifies the source of YANA Module to verify. Can be a local path or a URL.'
 		;;
 	pull)
-		builtin echo "Usage: yana.sh pull -source <path|url>"
-		builtin echo "  Pulls the specified YANA Module from the given source (path or URL)."
-		builtin echo "Options:"
-		builtin echo "  -source <path|url>         Specifies the source of YANA Module to pull. Can be path or URL. Uses YANA_SOURCE environment variable."
+		builtin echo 'Usage: yana.sh pull -source <path|url>'
+		builtin echo '  Pulls the specified YANA Module from the given source (path or URL).'
+		builtin echo 'Options:'
+		builtin echo '  -source <path|url>         Specifies the source of YANA Module to pull. Can be path or URL.'
 		;;
 	version)
-		builtin echo "Usage: yana.sh version"
-		builtin echo "  Displays the version of YANA."
+		builtin echo 'Usage: yana.sh version'
+		builtin echo '  Displays the version of YANA.'
 		;;
 	*)
-		builtin echo "Usage: yana.sh <general options> [mode] <mode options>"
-		builtin echo "Modes:"
-		builtin echo "  version									 	 Displays the version of YANA."
-		builtin echo "  apply                      Applies the specified YANA Module."
-		builtin echo "  verify                     Compares the state of the system with the state specified by the YANA Module without making any changes."
-		builtin echo "  pull                       Pulls the specified YANA Module."
+		builtin echo 'Usage: yana.sh <general options> [mode] <mode options>'
+		builtin echo 'Modes:'
+		builtin echo '  version									 	 Displays the version of YANA.'
+		builtin echo '  apply                      Applies the specified YANA Module.'
+		builtin echo '  verify                     Compares the state of the system with the state specified by the YANA Module without making any changes.'
+		builtin echo '  pull                       Pulls the specified YANA Module.'
 		;;
 	esac
-	builtin echo "General Options:"
-	builtin echo "  -help                      Displays this help message."
-	builtin echo "  -help <mode>               Displays help for the specified mode."
-	builtin echo "  -logfile <file>            Log file path. Uses YANA_LOGFILE environment variable. If not specified, logs are not written to a file."
+	builtin echo 'General Options:'
+	builtin echo '  -help                      Displays this help message.'
+	builtin echo '  -help <mode>               Displays help for the specified mode.'
+	builtin echo '  -logfile <file>            Log file path. If not specified, logs are not written to a file.'
+	builtin echo 'Environment Variables:'
+	builtin echo '  YANA_MODE=<mode>           Specifies the mode to run YANA in.'
+	builtin echo '  YANA_SOURCE=<path|url>     Specifies the source of the YANA Module.'
+	builtin echo '  YANA_LOGFILE=<file>        Specifies the log file path.'
+	builtin echo '  YANA_PARAM_<name>=<value>  Overrides a parameter declared in the module'\''s "params:" section.'
+	builtin echo '                             Example: YANA_PARAM_version=2.0 ./yana.sh apply -source ./module'
+	builtin echo '  YANA_DEBUG=true            Enables debug logging.'
+	builtin echo '  YANA_TRACE=true            Enables trace logging (implies debug logging).'
 }
 
 # Logs a colored message to the stderr.
@@ -472,12 +480,13 @@ _yana_load_spec_file() {
 	builtin readarray -t YANA_STEPS < <(jq -r -c '.steps // [] | .[] | @base64' "$YANA_SOURCE")
 	YANA_PARAMS=()
 	# Extract parameters into associative array
-	builtin local _yana_spec_params_raw _yana_spec_param _yana_spec_param_key _yana_spec_param_value _yana_spec_param_value_b64
+	builtin local _yana_spec_params_raw _yana_spec_param _yana_spec_param_key _yana_spec_param_value _yana_spec_param_value_b64 _yana_ev_key
 	while IFS= builtin read -r _yana_spec_param; do
 		[[ -n $_yana_spec_param ]] || continue
 		_yana_spec_param_key="${_yana_spec_param%%:*}"
 		_yana_spec_param_value=$(base64 -d <<<"${_yana_spec_param#*:}") || throw "Failed to decode base64 parameter value for key '$_yana_spec_param_key'." $ERR_DATA_FORMAT
-		YANA_PARAMS["$_yana_spec_param_key"]="$_yana_spec_param_value"
+		_yana_ev_key="YANA_PARAM_$_yana_spec_param_key"
+		YANA_PARAMS["$_yana_spec_param_key"]="${!_yana_ev_key-$_yana_spec_param_value}"
 	done < <(jq -r '(.params | objects) // {} | to_entries | map("\(.key):\(.value|@text|@base64)") | .[]' "$YANA_SOURCE")
 	YANA_VARS=()
 	# Extract variables into associative array
@@ -492,7 +501,7 @@ _yana_load_spec_file() {
 # Outputs the version of YANA.
 _yana_mode_version() { builtin echo "$YANA_VERSION"; }
 # Outputs the source directory of the YANA Module based on the YANA_SOURCE variable.
-_yana_source_dir() { [[ -d "$YANA_SOURCE" ]] && builtin echo "$YANA_SOURCE" || dirname "$YANA_SOURCE"; }
+_yana_source_dir() { [[ -d $YANA_SOURCE ]] && builtin echo "$YANA_SOURCE" || dirname "$YANA_SOURCE"; }
 # Pulls and unpacks the YANA Module from the specified source (local path or URL).
 _yana_mode_pull() {
 	[[ -z $YANA_SOURCE ]] && throw 'No source specified' $ERR_MISUSE

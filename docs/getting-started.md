@@ -54,7 +54,7 @@ YANA does not include installer. There are just two scripts for YANA Engine and 
     curl -L -o yana-test.sh 'https://github.com/oops-42/yana/releases/latest/download/yana-test.sh'
     chmod +x yana-test.sh
     ```
-    YANA Toolkit:
+    YANA Toolkit (In Future):
     ```bash
     curl -L -o yana-tool.sh 'https://github.com/oops-42/yana/releases/latest/download/yana-tool.sh'
     chmod +x yana-tool.sh
@@ -114,6 +114,33 @@ YANA does not include installer. There are just two scripts for YANA Engine and 
 
     ```bash
     ./yana.sh verify -source <path/to/.yana.json>
+    ```
+
+### Override the default parameter values
+
+You can override the default parameter values by setting the corresponding environment variables prefixed with `YANA_PARAM_` before running the `apply` or `verify` commands:
+
+=== "PowerShell (Windows)"
+
+    ```powershell
+    $Env:YANA_PARAM_param1 = 'new_value' # set parameter value for 'param1' using environment variable
+    ./yana.ps1 apply -source <path/to/.yana.json> # apply blueprint with overridden parameter values. Will use the value 'new_value' for 'param1'.
+
+    # OR
+
+    $Env:YANA_PARAM_param1 = 'new_value'; ./yana.ps1 apply -source <path/to/.yana.json> # apply blueprint with overridden parameter values. Will use the value 'new_value' for 'param1'.
+    ```
+
+=== "Bash (Linux/macOS)"
+
+
+    ```bash
+    export YANA_PARAM_param1='new_value' # set parameter value for 'param1' using environment variable
+    ./yana.sh apply -source <path/to/.yana.json> # apply blueprint with overridden parameter values. Will use the value 'new_value' for 'param1'.
+
+    # OR
+
+    YANA_PARAM_param1='new_value' ./yana.sh apply -source <path/to/.yana.json> # apply blueprint with overridden parameter values. Will use the value 'new_value' for 'param1'.
     ```
 
 ## Running the Testing Framework
