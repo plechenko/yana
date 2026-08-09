@@ -7,7 +7,11 @@ This page explains the core components of YANA and how they fit together.
 **YANA Engine** is an extremely lean and simple PowerShell/Bash script that runs directly on the target node.
 Less than 500 lines of commented and unit-tested code with minimal dependencies.
 
-It allows you to apply a [`yanaspec`](#yanaspec) to the managed node or verify the state of managed node.
+**YANA Engine** works in 3 modes:
+
+* `pull` - pulls a `yanapack` from a remote URL or uses local path
+* `verify` - checks the state of the managed node against the `yanaspec`
+* `apply` - applies the `yanapack` to the managed node
 
 > It is the operator's responsibility to ensure that all requirements are met on the target node before applying a `yanapack`.
 

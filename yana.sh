@@ -35,11 +35,11 @@ _yana_usage() {
 		builtin echo "Options:"
 		builtin echo "  -source <path|url>         Specifies the source of YANA Module to verify. Can be a local path or a URL. Uses YANA_SOURCE environment variable."
 		;;
-	fetch)
-		builtin echo "Usage: yana.sh fetch -source <path|url>"
-		builtin echo "  Fetches the specified YANA Module from the given source (path or URL)."
+	pull)
+		builtin echo "Usage: yana.sh pull -source <path|url>"
+		builtin echo "  Pulls the specified YANA Module from the given source (path or URL)."
 		builtin echo "Options:"
-		builtin echo "  -source <path|url>         Specifies the source of YANA Module to fetch. Can be path or URL. Uses YANA_SOURCE environment variable."
+		builtin echo "  -source <path|url>         Specifies the source of YANA Module to pull. Can be path or URL. Uses YANA_SOURCE environment variable."
 		;;
 	version)
 		builtin echo "Usage: yana.sh version"
@@ -51,7 +51,7 @@ _yana_usage() {
 		builtin echo "  version									 	 Displays the version of YANA."
 		builtin echo "  apply                      Applies the specified YANA Module."
 		builtin echo "  verify                     Compares the state of the system with the state specified by the YANA Module without making any changes."
-		builtin echo "  fetch                      Fetches the specified YANA Module."
+		builtin echo "  pull                       Pulls the specified YANA Module."
 		;;
 	esac
 	builtin echo "General Options:"
@@ -94,7 +94,7 @@ log() {
 # Throws an error message and exits the script with the specified return code.
 throw() {
 	set +x
-	builtin local _message="${1:-${message:-}}"
+	builtin local _message="${1:-${message:-Halted}}"
 	builtin local _rc="${2:-${rc:-$ERR_GENERAL}}"
 	log fatal "$_message"
 	builtin local _frame=0 _trace
@@ -208,7 +208,8 @@ _yana_execute_fn() {
 	else
 		throw "Invalid function name format: '$_yana_fn'. Expected format: '[module/]script:function'." $ERR_NO_INPUT
 	fi
-	builtin local _rc=0
+	builtin local _rc=0 _yana_source_dir
+	_yana_source_dir=$(_yana_source_dir) || throw
 	_yana_output_ref=$(
 		# Unset any previously defined private _yana_ functions and variables to avoid conflicts
 		for _fn in $(builtin declare -F | awk '$3 ~ /^_yana_/ {print $3}'); do unset -f "$_fn"; done
@@ -217,8 +218,8 @@ _yana_execute_fn() {
 
 		# Load the common scripts for the module if they exist
 		builtin local -a _yana_include_scripts
-		builtin readarray -t _yana_include_scripts < <(ls -1 "$YANA_SOURCE/.yana"/*/.sh "$YANA_SOURCE/.yana/.sh" 2>/dev/null || true)
-		[[ -n $_yana_fn_script ]] && _yana_include_scripts+=("$YANA_SOURCE/.yana/${_yana_fn_script}.sh")
+		builtin readarray -t _yana_include_scripts < <(ls -1 "$_yana_source_dir/.yana"/*/.sh "$_yana_source_dir/.yana/.sh" 2>/dev/null || true)
+		[[ -n $_yana_fn_script ]] && _yana_include_scripts+=("$_yana_source_dir/.yana/${_yana_fn_script}.sh")
 		builtin local _yana_script_path
 		for _yana_script_path in "${_yana_include_scripts[@]}"; do
 			log trace "Sourcing script '$_yana_script_path'"
@@ -457,20 +458,18 @@ _yana_apply_step() {
 }
 # Reads and parses the YANA spec file.
 _yana_load_spec_file() {
-	builtin local _yana_spec_path="${YANA_SOURCE}/.yana.json" _yana_spec_file
-	_yana_spec_file=$(realpath "$_yana_spec_path" 2>/dev/null) || throw "'$_yana_spec_path': No such file or directory" $ERR_NO_INPUT
-	jq -e -r '.' "$_yana_spec_file" >/dev/null 2>&1 || throw "Failed to parse YANA spec file '$_yana_spec_file'. Ensure it is valid JSON." $ERR_DATA_FORMAT
+	jq -e -r '.' "$YANA_SOURCE" >/dev/null 2>&1 || throw "Failed to parse YANA spec file '$YANA_SOURCE'. Ensure it is valid JSON." $ERR_DATA_FORMAT
 
 	YANA_SPEC=()
-	YANA_SPEC[name]=$(jq -r '.name // empty' "$_yana_spec_file")
-	YANA_SPEC[description]=$(jq -r '.description // empty' "$_yana_spec_file")
-	YANA_SPEC[version]=$(jq -r '.version // empty' "$_yana_spec_file")
-	YANA_SPEC[author]=$(jq -r '.author // empty' "$_yana_spec_file")
-	YANA_SPEC[license]=$(jq -r '.license // empty' "$_yana_spec_file")
+	YANA_SPEC[name]=$(jq -r '.name // empty' "$YANA_SOURCE")
+	YANA_SPEC[description]=$(jq -r '.description // empty' "$YANA_SOURCE")
+	YANA_SPEC[version]=$(jq -r '.version // empty' "$YANA_SOURCE")
+	YANA_SPEC[author]=$(jq -r '.author // empty' "$YANA_SOURCE")
+	YANA_SPEC[license]=$(jq -r '.license // empty' "$YANA_SOURCE")
 	YANA_REQUIRES=()
-	builtin readarray -t YANA_REQUIRES < <(jq -r '(.requires // []) | .[]' "$_yana_spec_file")
+	builtin readarray -t YANA_REQUIRES < <(jq -r '(.requires // []) | .[]' "$YANA_SOURCE")
 	YANA_STEPS=()
-	builtin readarray -t YANA_STEPS < <(jq -r -c '.steps // [] | .[] | @base64' "$_yana_spec_file")
+	builtin readarray -t YANA_STEPS < <(jq -r -c '.steps // [] | .[] | @base64' "$YANA_SOURCE")
 	YANA_PARAMS=()
 	# Extract parameters into associative array
 	builtin local _yana_spec_params_raw _yana_spec_param _yana_spec_param_key _yana_spec_param_value _yana_spec_param_value_b64
@@ -479,7 +478,7 @@ _yana_load_spec_file() {
 		_yana_spec_param_key="${_yana_spec_param%%:*}"
 		_yana_spec_param_value=$(base64 -d <<<"${_yana_spec_param#*:}") || throw "Failed to decode base64 parameter value for key '$_yana_spec_param_key'." $ERR_DATA_FORMAT
 		YANA_PARAMS["$_yana_spec_param_key"]="$_yana_spec_param_value"
-	done < <(jq -r '(.params | objects) // {} | to_entries | map("\(.key):\(.value|@text|@base64)") | .[]' "$_yana_spec_file")
+	done < <(jq -r '(.params | objects) // {} | to_entries | map("\(.key):\(.value|@text|@base64)") | .[]' "$YANA_SOURCE")
 	YANA_VARS=()
 	# Extract variables into associative array
 	builtin local _yana_spec_vars_raw _yana_spec_var _yana_spec_var_key _yana_spec_var_value _yana_spec_var_value_b64
@@ -488,23 +487,41 @@ _yana_load_spec_file() {
 		_yana_spec_var_key="${_yana_spec_var%%:*}"
 		_yana_spec_var_value=$(base64 -d <<<"${_yana_spec_var#*:}") || throw "Failed to decode base64 variable value for key '$_yana_spec_var_key'." $ERR_DATA_FORMAT
 		YANA_VARS["$_yana_spec_var_key"]="$_yana_spec_var_value"
-	done < <(jq -r '(.vars | objects) // {} | to_entries | map("\(.key):\(.value|@json|@base64)") | .[]' "$_yana_spec_file")
+	done < <(jq -r '(.vars | objects) // {} | to_entries | map("\(.key):\(.value|@json|@base64)") | .[]' "$YANA_SOURCE")
 }
 # Outputs the version of YANA.
 _yana_mode_version() { builtin echo "$YANA_VERSION"; }
-# Fetches and unpacks the YANA Module from the specified source (local path or URL).
-_yana_mode_fetch() {
-	[[ -z $YANA_SOURCE ]] && throw 'No source specified'
-	log info "Fetching YANA Module: $YANA_SOURCE"
-	log warn "Assume $YANA_SOURCE is a local path for now. _yana_mode_fetch will handle fetching from URL later."
-	[[ -d $YANA_SOURCE ]] || throw "'$YANA_SOURCE': No such directory" $ERR_NO_INPUT
-	[[ -f "$YANA_SOURCE/.yana.json" ]] || throw "'$YANA_SOURCE/.yana.json': No such file" $ERR_NO_INPUT
+# Outputs the source directory of the YANA Module based on the YANA_SOURCE variable.
+_yana_source_dir() { [[ -d "$YANA_SOURCE" ]] && builtin echo "$YANA_SOURCE" || dirname "$YANA_SOURCE"; }
+# Pulls and unpacks the YANA Module from the specified source (local path or URL).
+_yana_mode_pull() {
+	[[ -z $YANA_SOURCE ]] && throw 'No source specified' $ERR_MISUSE
+	if [[ $YANA_SOURCE =~ ^https?:// ]]; then
+		builtin local _yana_tmp_dir="${TMPDIR:-/tmp}/yana-$(date +%s%N)"
+		mkdir -p "$_yana_tmp_dir" || throw "Failed to create temporary directory '$_yana_tmp_dir'." $ERR_GENERAL
+		log info 'Downloading YANA Module from provided source'
+		curl -fsSL "$YANA_SOURCE" -o "$_yana_tmp_dir/yana_module.tar.gz" || {
+			[[ ${YANA_DEBUG:-false} == true ]] || rm -rf "$_yana_tmp_dir"
+			throw 'Failed to download YANA Module' $ERR_GENERAL
+		}
+		log debug "Extracting downloaded YANA Module to temporary directory: $_yana_tmp_dir"
+		tar -xzf "$_yana_tmp_dir/yana_module.tar.gz" -C "$_yana_tmp_dir" || {
+			[[ ${YANA_DEBUG:-false} == true ]] || rm -rf "$_yana_tmp_dir"
+			throw 'Failed to extract YANA Module from downloaded archive' $ERR_GENERAL
+		}
+		YANA_SOURCE="$_yana_tmp_dir"
+	fi
+	[[ -e $YANA_SOURCE ]] || throw "'$YANA_SOURCE': No such file or directory" $ERR_NO_INPUT
+	[[ -d $YANA_SOURCE ]] && YANA_SOURCE="$YANA_SOURCE/.yana.json"
+	YANA_SOURCE=$(realpath "$YANA_SOURCE") || throw "'$YANA_SOURCE': Failed to resolve real path" $ERR_GENERAL
+	[[ -f $YANA_SOURCE ]] || throw "'$YANA_SOURCE': No such file" $ERR_NO_INPUT
+	# Here we will validate the integrity of the YANA Module.
 }
 # Verifies the YANA Module from the specified source (local path or URL) without making any changes.
 _yana_mode_verify() {
 	[[ -z $YANA_SOURCE ]] && throw 'No source specified'
-	_yana_mode_fetch
-	log info "Verifying YANA Module: $YANA_SOURCE"
+	_yana_mode_pull
+	log info "Verifying YANASPEC: $YANA_SOURCE"
 	builtin local -A YANA_SPEC YANA_PARAMS YANA_VARS
 	builtin local -a YANA_STEPS YANA_REQUIRES
 	_yana_load_spec_file
@@ -523,8 +540,8 @@ _yana_mode_verify() {
 # Applies the YANA Module from the specified source (local path or URL).
 _yana_mode_apply() {
 	[[ -z $YANA_SOURCE ]] && throw 'No source specified'
-	_yana_mode_fetch
-	log info "Applying YANA Module: $YANA_SOURCE"
+	_yana_mode_pull
+	log info "Applying YANASPEC: $YANA_SOURCE"
 	builtin local -A YANA_SPEC YANA_PARAMS YANA_VARS
 	builtin local -a YANA_STEPS YANA_REQUIRES
 	_yana_load_spec_file
@@ -553,7 +570,7 @@ _yana_() {
 	builtin local YANA_MODE="${YANA_MODE:-}" YANA_SOURCE="${YANA_SOURCE:-}" YANA_LOGFILE="${YANA_LOGFILE:-}" YANA_TRACE="${YANA_TRACE:-false}" YANA_DEBUG="${YANA_DEBUG:-false}" _yana_show_help=false
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		apply | verify | fetch | version) YANA_MODE="$1" ;;
+		apply | verify | pull | version) YANA_MODE="$1" ;;
 		-source | --source)
 			builtin shift
 			[[ $# -ge 1 && $1 != -* ]] || throw 'Missing value for -source'

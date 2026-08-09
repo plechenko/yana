@@ -131,7 +131,7 @@ function YANAtest:_yana_@mode_apply {
     function log {}
     function _yana_mode_apply([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     function _yana_mode_verify([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
-    function _yana_mode_fetch([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
+    function _yana_mode_pull([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     $local:_YANA_MODE, $local:_YANA_SOURCE = $env:YANA_MODE, $env:YANA_SOURCE
     $env:YANA_MODE, $env:YANA_SOURCE = $null, $null
     try {
@@ -171,7 +171,7 @@ function YANAtest:_yana_@mode_verify {
     function log {}
     function _yana_mode_apply([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     function _yana_mode_verify([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
-    function _yana_mode_fetch([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
+    function _yana_mode_pull([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     $local:_YANA_MODE, $local:_YANA_SOURCE = $env:YANA_MODE, $env:YANA_SOURCE
     $env:YANA_MODE, $env:YANA_SOURCE = $null, $null
     try {
@@ -205,17 +205,17 @@ function YANAtest:_yana_@mode_verify {
   }
 }
 
-function YANAtest:_yana_@mode_fetch {
+function YANAtest:_yana_@mode_pull {
   $result = @{exit_code = 0; exception = $null; output = $null }
   $result.output = & {
     function log {}
     function _yana_mode_apply([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     function _yana_mode_verify([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
-    function _yana_mode_fetch([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
+    function _yana_mode_pull([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     $local:_YANA_MODE, $local:_YANA_SOURCE = $env:YANA_MODE, $env:YANA_SOURCE
     $env:YANA_MODE, $env:YANA_SOURCE = $null, $null
     try {
-      _yana_ -Mode 'fetch' -Source some_source
+      _yana_ -Mode 'pull' -Source some_source
     } catch {
       $result.exception, $result.exit_code = $_.Exception, $_.Exception.HResult
     } finally {
@@ -230,18 +230,18 @@ function YANAtest:_yana_@mode_fetch {
     fail "Expected exit code 0 but got: $($result.exit_code)"
   }
   if ($result.output.Length -eq 1) {
-    if ($result.output[0].Command -eq '_yana_mode_fetch') {
-      pass '_yana_mode_fetch is called'
+    if ($result.output[0].Command -eq '_yana_mode_pull') {
+      pass '_yana_mode_pull is called'
       if ($result.output[0].Args['Source'] -eq 'some_source') {
-        pass '_yana_mode_fetch source is correct'
+        pass '_yana_mode_pull source is correct'
       } else {
-        fail "Expected _yana_mode_fetch source to be 'some_source' but got: $($result.output[0].Args['Source'])"
+        fail "Expected _yana_mode_pull source to be 'some_source' but got: $($result.output[0].Args['Source'])"
       }
     } else {
-      fail "Expected _yana_mode_fetch to be called but got: $($result.output[0].Command)"
+      fail "Expected _yana_mode_pull to be called but got: $($result.output[0].Command)"
     }
   } else {
-    fail "Expected _yana_mode_fetch to be called once but got: $($result.output.Length) times"
+    fail "Expected _yana_mode_pull to be called once but got: $($result.output.Length) times"
   }
 }
 
@@ -251,7 +251,7 @@ function YANAtest:_yana_@invalid_mode {
     function log {}
     function _yana_mode_apply([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     function _yana_mode_verify([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
-    function _yana_mode_fetch([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
+    function _yana_mode_pull([string]$Source) { @{ Command = $MyInvocation.MyCommand.Name; Args = $PSBoundParameters } }
     $local:_YANA_MODE, $local:_YANA_SOURCE = $env:YANA_MODE, $env:YANA_SOURCE
     $env:YANA_MODE, $env:YANA_SOURCE = $null, $null
     try {
@@ -292,7 +292,7 @@ function YANAtest:_yana_@env_vars {
     function log {}
     function _yana_mode_apply([string]$Source) { "apply: '$Source'" }
     function _yana_mode_verify([string]$Source) { "verify: '$Source'" }
-    function _yana_mode_fetch([string]$Source) { "fetch: '$Source'" }
+    function _yana_mode_pull([string]$Source) { "pull: '$Source'" }
     $local:_YANA_MODE, $local:_YANA_SOURCE = $env:YANA_MODE, $env:YANA_SOURCE
     $env:YANA_MODE, $env:YANA_SOURCE = 'apply', 'some_source'
     try {

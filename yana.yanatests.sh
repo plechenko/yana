@@ -113,19 +113,19 @@ function YANAtest:_yana_@help_mode_verify {
 	fi
 }
 
-function YANAtest:_yana_@help_mode_fetch {
+function YANAtest:_yana_@help_mode_pull {
 	local _rc test_result
 	_rc=0
-	test_result=$(YANA_MODE='' YANA_SOURCE='' YANA_LOGFILE='' _yana_ -help fetch 2>&1) || _rc=$?
+	test_result=$(YANA_MODE='' YANA_SOURCE='' YANA_LOGFILE='' _yana_ -help pull 2>&1) || _rc=$?
 	if [[ $_rc -eq 0 ]]; then
-		pass 'should return 0 when invoked with -help fetch'
+		pass 'should return 0 when invoked with -help pull'
 	else
-		fail "should return 0 when invoked with -help fetch, got: $_rc"
+		fail "should return 0 when invoked with -help pull, got: $_rc"
 	fi
-	if [[ $test_result == *'Usage: yana.sh fetch -source <path|url>'* ]]; then
-		pass 'should print usage information for fetch mode when invoked with -help fetch'
+	if [[ $test_result == *'Usage: yana.sh pull -source <path|url>'* ]]; then
+		pass 'should print usage information for pull mode when invoked with -help pull'
 	else
-		fail "should print usage information for fetch mode when invoked with -help fetch, got: $test_result"
+		fail "should print usage information for pull mode when invoked with -help pull, got: $test_result"
 	fi
 }
 
@@ -196,28 +196,28 @@ function YANAtest:_yana_@mode_apply_no_source {
 	fi
 }
 
-function YANAtest:_yana_@mode_fetch {
+function YANAtest:_yana_@mode_pull {
 	local _rc test_result
 	_rc=0
 	test_result=$(
-		function _yana_mode_fetch() {
-			builtin echo "fetch: '$YANA_SOURCE'"
+		function _yana_mode_pull() {
+			builtin echo "pull: '$YANA_SOURCE'"
 		}
 		# log() {
 		# 	builtin echo "log: $1"
 		# }
 
-		YANA_MODE='' YANA_SOURCE='' YANA_LOGFILE='' _yana_ fetch -source 'qwerty' 2>/dev/null
+		YANA_MODE='' YANA_SOURCE='' YANA_LOGFILE='' _yana_ pull -source 'qwerty' 2>/dev/null
 	) || _rc=$?
 	if [[ $_rc -eq 0 ]]; then
-		pass 'should return 0 when invoked with fetch'
+		pass 'should return 0 when invoked with pull'
 	else
-		fail "should return 0 when invoked with fetch, got: $_rc"
+		fail "should return 0 when invoked with pull, got: $_rc"
 	fi
-	if [[ $test_result == "fetch: 'qwerty'" ]]; then
-		pass 'should print fetch mode invocation message'
+	if [[ $test_result == "pull: 'qwerty'" ]]; then
+		pass 'should print pull mode invocation message'
 	else
-		fail "should print fetch mode invocation message, got: $test_result"
+		fail "should print pull mode invocation message, got: $test_result"
 	fi
 }
 

@@ -25,11 +25,11 @@ function _yana_usage([string]$Mode) {
       Write-Host '  -source <path|url>         Specifies the source of YANA Module to verify. Can be a local path or a URL. Uses YANA_SOURCE environment variable.'
       break
     }
-    'fetch' {
-      Write-Host 'Usage: yana.ps1 fetch -source <path|url>'
-      Write-Host '  Fetches the specified YANA Module from the given source (path or URL).'
+    'pull' {
+      Write-Host 'Usage: yana.ps1 pull -source <path|url>'
+      Write-Host '  Pulls the specified YANA Module from the given source (path or URL).'
       Write-Host 'Options:'
-      Write-Host '  -source <path|url>         Specifies the source of YANA Module to fetch. Can be path or URL. Uses YANA_SOURCE environment variable.'
+      Write-Host '  -source <path|url>         Specifies the source of YANA Module to pull. Can be path or URL. Uses YANA_SOURCE environment variable.'
     }
     'version' {
       Write-Host 'Usage: yana.ps1 version'
@@ -41,14 +41,13 @@ function _yana_usage([string]$Mode) {
       Write-Host '  version                    Displays the version of YANA.'
       Write-Host '  apply                      Applies the specified YANA Module.'
       Write-Host '  verify                     Compares the state of the system with the state specified by the YANA Module without making any changes.'
-      Write-Host '  fetch                      Fetches the specified YANA Module.'
+      Write-Host '  pull                       Pulls the specified YANA Module.'
     }
   }
   Write-Host 'General Options:'
   Write-Host '  -help                      Displays this help message.'
   Write-Host '  -help <mode>               Displays help for the specified mode.'
   Write-Host '  -logfile <file>            Log file path. Uses YANA_LOGFILE environment variable. If not specified, logs are not written to a file.'
-
 }
 # Logs a message with the specified level and message.
 # If the level is 'trace' or 'debug', the message is logged only if the corresponding switch is enabled.
@@ -220,8 +219,10 @@ function _yana_tohashtable([Parameter(ValueFromPipeline = $true)]$InputObject) {
 }
 # Loads and parses the YANA spec file.
 function _yana_load_spec_file([string]$Source) {
-  $_yana_spec_source = [System.IO.Path]::GetFullPath($Source)
-  $_yana_spec_file = [System.IO.Path]::Combine($_yana_spec_source, '.yana.json')
+  $_yana_spec_file = [System.IO.Path]::GetFullPath($Source)
+  if (Test-Path -Path $_yana_spec_file -PathType Container) { $_yana_spec_file = [System.IO.Path]::Combine($_yana_spec_file, '.yana.json') }
+  if (-not (Test-Path -Path $_yana_spec_file -PathType Leaf)) { throw "Source '$_yana_spec_file' does not exist." }
+
   $spec = Get-Content -Path $_yana_spec_file -Raw | ConvertFrom-Json | _yana_tohashtable
   if ($spec -isnot [hashtable]) { throw "Failed to parse YANA spec file '$_yana_spec_file'." }
 
@@ -244,7 +245,7 @@ function _yana_load_spec_file([string]$Source) {
   $Script:YANA_VARS = $spec['vars']
   if ($null -eq $Script:YANA_VARS) { $Script:YANA_VARS = @{} }
   if ($Script:YANA_VARS -isnot [hashtable]) { throw "Spec field 'vars' must be an object." }
-  $_yana_spec_source
+  return [System.IO.Path]::GetDirectoryName($_yana_spec_file)
 }
 function _yana_expand_var([string]$VarName, [hashtable]$Vars) {
   if (-not $Vars.ContainsKey($VarName)) { throw "Variable '$VarName' is not defined." }
@@ -359,16 +360,33 @@ function _yana_apply_step([hashtable]$Step, [string]$RootDir = $Script:YANA_SOUR
   throw "Step '$stepName' is not compliant after apply"
 }
 
-# 	Fetches the specified YANA Module.
-function _yana_mode_fetch([string]$Source) {
-  if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''fetch'' mode.' }
-  log info "Fetching YANA Module from source: $Source"
-  # Placeholder for actual implementation of fetching the YANA module
+# Pulls, unpacks and verifies the YANA Module as yanapack from the specified source (url/path).
+# Returns path to the unpacked YANA Module.
+function _yana_mode_pull([ValidateNotNullOrEmpty()][string]$Source = $Env:YANA_SOURCE) {
+  if ($Source -match '^https?://') {
+    $uri = $null
+    [uri]::TryCreate($Source, [uriKind]::Absolute, [ref]$uri) | Out-Null
+    if ($null -eq $uri -or ($uri.Scheme -notin 'http', 'https')) { throw "Source '$Source' is not a valid URL." }
+    log info 'Downloading YANA Module from provided source'
+    $tempDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    $zipFile = [System.IO.Path]::Combine($tempDir, 'yanapack.zip')
+    Invoke-WebRequest -Uri $Source -OutFile $zipFile -ErrorAction Stop -UseBasicParsing -TimeoutSec 30
+    log debug "Downloaded YANA Module to '$zipFile'. Unpacking..."
+    Expand-Archive -Path $zipFile -DestinationPath $tempDir -Force
+    Remove-Item -Path $zipFile -Force
+    # Later add verification of the downloaded module (e.g., checksum, signature) if needed.
+    $Source = $tempDir
+  }
+  $Source = [System.IO.Path]::GetFullPath($Source)
+  if (Test-Path -Path $Source -PathType Container) { $Source = [System.IO.Path]::Combine($Source, '.yana.json') }
+  if (-not (Test-Path -Path $Source -PathType leaf)) { throw "Source '$Source' does not exist." }
+  return $Source
 }
 #	Applies the specified YANA Module.
-function _yana_mode_apply([string]$Source) {
-  if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''apply'' mode.' }
-  _yana_mode_fetch -Source $Source
+function _yana_mode_apply([ValidateNotNullOrEmpty()][string]$Source = $Env:YANA_SOURCE) {
+  # if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''apply'' mode.' }
+  $Source = _yana_mode_pull -Source $Source
   log info "Applying YANA Module from source: $Source"
 
   $Script:YANA_SOURCE = _yana_load_spec_file -Source $Source
@@ -379,9 +397,9 @@ function _yana_mode_apply([string]$Source) {
   }
   log success "YANA Module applied successfully: $Script:YANA_SOURCE"
 }
-function _yana_mode_verify([string]$Source) {
-  if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''verify'' mode' }
-  _yana_mode_fetch -Source $Source
+function _yana_mode_verify([ValidateNotNullOrEmpty()][string]$Source = $Env:YANA_SOURCE) {
+  # if ([string]::IsNullOrEmpty($Source)) { throw 'Source is required for ''verify'' mode' }
+  $Source = _yana_mode_pull -Source $Source
   log info "Verifying YANA Module from source: $Source"
 
   $Script:YANA_SOURCE = _yana_load_spec_file -Source $Source
@@ -402,9 +420,9 @@ function _yana_ {
     # If specified, outputs help information and exits.
     [switch]$Help,
     [Parameter(Position = 0)]
-    [ValidateSet('apply', 'verify', 'fetch', 'version')]
+    [ValidateSet('apply', 'verify', 'pull', 'version')]
     [string]$Mode = $Env:YANA_MODE,
-    # If specified, the source of the YANA Module to apply/verify/fetch.
+    # If specified, the source of the YANA Module to apply/verify/pull.
     # [Parameter(Position = 1)]
     [string]$Source = $Env:YANA_SOURCE,
     # If specified, outputs log messages to the given file.
@@ -416,16 +434,13 @@ function _yana_ {
   log info "$Script:YANA_TITLE Version: $Script:YANA_VERSION"
   $Script:YANA_TRACE = $Env:YANA_TRACE -eq 'true'
   $Script:YANA_DEBUG = $Script:YANA_TRACE -or $Env:YANA_DEBUG -eq 'true'
-  if ($Script:YANA_TRACE -or $Script:YANA_DEBUG) {
-    log debug 'Debug logging is enabled.'
-    $script:VerbosePreference = 'Continue'
-  }
-
+  if ($Script:YANA_DEBUG) { log debug 'Debug logging is enabled.' }
+  if ($Script:YANA_TRACE) { $script:VerbosePreference = 'Continue' }
   if ($Help) { _yana_usage -Mode $Mode; return }
   switch ($Mode) {
     'apply' { _yana_mode_apply -Source $Source }
     'verify' { _yana_mode_verify -Source $Source }
-    'fetch' { _yana_mode_fetch -Source $Source }
+    'pull' { _yana_mode_pull -Source $Source }
     'version' { $Script:YANA_VERSION }
     default { throw "Unknown mode: '$Mode'. Use -help for usage information." }
   }
